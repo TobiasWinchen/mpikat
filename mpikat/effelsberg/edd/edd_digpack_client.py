@@ -161,6 +161,7 @@ class DigitiserPacketiserClient(object):
                     port 7148). Currently the packetiser only accepts contiguous IP
                     ranges for each set of destinations.
         """
+        # ?capture-list
         yield self._safe_request("capture_destination", "v", v_dest)
         yield self._safe_request("capture_destination", "h", h_dest)
 
@@ -172,7 +173,10 @@ class DigitiserPacketiserClient(object):
         @param      intf   The interface specified as a string integer, e.g. '0' or '1'
         @param      ip     The IP address to assign to the interface
         """
-        yield self._safe_request("rxs_packetizer_40g_source_ip_set", intf, ip)
+        response = yield self._safe_request("rxs_packetizer_40g_source_ip_get", intf)
+        if response.reply.arguments[1] != ip:
+            log.debug("Update IP for interface {} from {} to {}".format(intf, response.reply.arguments[1], ip))
+            yield self._safe_request("rxs_packetizer_40g_source_ip_set", intf, ip)
 
     @coroutine
     def capture_start(self):
