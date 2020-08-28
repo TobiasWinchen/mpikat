@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 from mpikat.utils.ip_utils import split_ipstring, is_validat_multicast_range
 
@@ -123,7 +123,7 @@ class SkarabChannelizerClient(SkarabInterface):
 
 
     @coroutine
-    def configure_inputs(self, ip0, ip1, port=7148):
+    def configure_inputs(self, ips0, ips1, port=None):
         """
         Does multicast group subscription. ip0, ip1 are of format
         225.0.0.152+3 to give .152, .153, .154, .155
@@ -132,69 +132,31 @@ class SkarabChannelizerClient(SkarabInterface):
         rx_core1_name = 'gbe1'
         log.debug('Subscribing to multicast groups ...')
 
-        def subscribe_multicast(transport, interface_id, ip_high, ip_low, mask_high, mask_low, timeout, retries):
-            """
-            Adapted version of transport.multicast_receive in caperfpga.transport_skarab inteded to circumvent limitations of subscriptions.
-            """
-            from casperfpga.network import IpAddress
-            from casperfpga.transport_skarab import NetworkConfigurationError
-            import casperfpga.skarab_definitions as sd
-
-            request = sd.ConfigureMulticastReq(interface_id, ip_high, ip_low, mask_high, mask_low)
-            response = transport.send_packet(request, timeout=timeout, retries=retries)
-            resp_pkt = response.packet
-
-     # check status
-            if resp_pkt['status'] == sd.MULTILINK_CMD_STATUS_SUCCESS:
-                msg = 'multicast to be configured for interface {}'.format(
-                    interface_id)
-                log.debug(msg)
-            elif resp_pkt['status'] == sd.MULTILINK_CMD_STATUS_ERROR_GENERAL:
-                errmsg = 'failed to configure multicast for specified ' \
-                         'interface {}'.format(interface_id)
-                log.error(errmsg)
-                raise NetworkConfigurationError(errmsg)
-            elif resp_pkt['status'] == sd.MULTILINK_CMD_STATUS_ERROR_IF_OUT_OF_RANGE:
-                errmsg = 'invalid interface identifier specified: {}'.format(
-                    interface_id)
-                log.error(errmsg)
-                raise NetworkConfigurationError(errmsg)
-            elif resp_pkt['status'] == sd.MULTILINK_CMD_STATUS_ERROR_IF_NOT_PRESENT:
-                errmsg = 'specified interface: {} not present in design'.format(
-                    interface_id)
-                log.error(errmsg)
-                raise NetworkConfigurationError(errmsg)
-
-            resp_ip = IpAddress(resp_pkt['fabric_multicast_ip_address_high'] << 16 |
-                                resp_pkt['fabric_multicast_ip_address_low'])
-            resp_mask = IpAddress(
-                resp_pkt['fabric_multicast_ip_address_mask_high'] << 16 |
-                resp_pkt['fabric_multicast_ip_address_mask_low'])
-            log.debug('Interface id {}: multicast configured: addr {} mask {}'.format(interface_id, resp_ip.ip_str, resp_mask.ip_str))
+        ip0, N0, p0 = split_ipstring(ips0)
+        ip1, N1, p1 = split_ipstring(ips1)
+        if not is_validat_multicast_range(ip0, N0, p0):
+            raise RuntimeError("Invalid multicast range {}".format(ips0))
+        if not is_validat_multicast_range(ip1, N1, p1):
+            raise RuntimeError("Invalid multicast range {}".format(ips1))
+        if not N0 == N1:
+            raise RuntimeError("Multicast range of both interfaces have to match {} {}".format(ips0, ips1))
+        if not port and p1:
+            port = p1
 
 
+        log.debug(" - set IGMP version to 2")
         self._client.set_igmp_version("2")
 
-        mask = casperfpga.gbe.IpAddress("255.255.255.255").ip_int & 0xFFFF      # Only last part of ip
+        mask = casperfpga.gbe.IpAddress("255.255.255.252")
+        ip0 = casperfpga.gbe.IpAddress(ip0)
 
-        ip, N, p = split_ipstring(ip0)
-        ip_low = casperfpga.gbe.IpAddress(ip).ip_int  & 0xFFFF      # Only last part of ip
-        ip_high = ip_low + N - 1
-        subscribe_multicast(self._client.transport, 1, ip_high, ip_low, mask, mask, self._client.transport.timeout, self._client.transport.retries)
-
-
-        ip, N, p = split_ipstring(ip1)
-        ip_low = casperfpga.gbe.IpAddress(ip).ip_int & 0xFFFF      # Only last part of ip
-
-        ip_high = ip_low + N - 1
-        subscribe_multicast(self._client.transport, 2, ip_high, ip_low, mask, mask, self._client.transport.timeout, self._client.transport.retries)
-
-
-
-        #self._client.transport.multicast_receive("gbe0", ip0, mask, 1)
-        #self._client.transport.multicast_receive("gbe1", ip1, mask, 2)
-
+        log.debug(" - configure gbe0 to {} with mask {}".format(ip0.ip_str, mask.ip_str))
+        self._client.transport.multicast_receive("gbe0", ip0, mask, 1)
         self._client.gbes.gbe0.set_port(port)
+
+        ip1 = casperfpga.gbe.IpAddress(ip1)
+        log.debug(" - configure gbe1 to {} with mask {}".format(ip1.ip_str, mask.ip_str))
+        self._client.transport.multicast_receive("gbe1", ip1, mask, 2)
         self._client.gbes.gbe1.set_port(port)
 
 
@@ -335,10 +297,10 @@ class SkarabChannelizerClient(SkarabInterface):
         self._client.registers.control.write(sys_rst='pulse') #256: sys_rst, 511 mrst pulse
         yield sleep(1)
 
-    @coroutine
-    def program(self):
-        SkarabInterface.program(self)
-        yield self.reset_registers()
+#    @coroutine
+#    def program(self):
+#        yield SkarabInterface.program(self)
+#        yield self.reset_registers()
 
 #
 #@coroutine
@@ -431,17 +393,7 @@ if __name__ == "__main__":
         actions.append((client.configure_output, dict(dest_ip=ip, dest_port=port, number_of_groups=N)))
     if args.inputs:
         inp0, inp1 = args.inputs.split(',')
-
-        ip0, N0, port0 = split_ipstring(inp0)
-        ip1, N1, port1 = split_ipstring(inp1)
-        if not is_validat_multicast_range(ip0, N0, port0):
-            raise RuntimeError("input range {} not valid!".format(inp0))
-        if not is_validat_multicast_range(ip0, N0, port0):
-            raise RuntimeError("input range {} not valid!".format(inp1))
-
-        if port0 != port1:
-            raise RuntimeError('Ports do not match; cannot configure independent ports.')
-        actions.append((client.configure_inputs, dict(ip0=ip0, ip1=ip1, port=port0)))
+        actions.append((client.configure_inputs, dict(ips0=inp0, ips1=inp1)))
 
     if args.quantization:
         if args.quantization.startswith("0x"):
