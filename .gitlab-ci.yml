@@ -1,6 +1,9 @@
 image: edd01:5000/eddbase:latest
 
 
+before-script:
+  - apt-get install python-ipaddress
+
 test:
   script:
     - ./test.py
