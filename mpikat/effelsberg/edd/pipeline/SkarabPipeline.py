@@ -27,19 +27,20 @@ from mpikat.effelsberg.edd.edd_skarab_client import SkarabChannelizerClient
 import mpikat.utils.ip_utils as ip_utils
 
 from tornado.gen import coroutine, sleep
-from tornado.ioloop import IOLoop 
+from tornado.ioloop import IOLoop
 from katcp import Sensor, FailReply
 
 import logging
 import json
+import os
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.SkarabPipeline")
 log.setLevel('DEBUG')
 
 DEFAULT_CONFIG = {
-        "id": "SkarabPipeline",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
+        "id": "SkarabPipeline",                          # default name for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "SkarabPipeline",
-        "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
+        "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supported input formats name:version
         "input_data_streams":
         {
             "polarization_0" :
@@ -73,8 +74,8 @@ DEFAULT_CONFIG = {
         },
 
         "log_level": "debug",
-        "force_program": False,
-        "firmware": "s_ubb_64ch_codd_2020-07-31_1348.fpg",
+        "force_program": False,                 # Force reprogramming of with new firmware version
+        "firmware": os.path.join(os.path.dirname(os.path.realpath(__file__)), "skarab_firmware", "s_ubb_64ch_codd_2020-07-31_1348.fpg"),
         "channels_per_group": 8,                # Channels per multicast group in the fpga output
         "board_id": 23,                         # Id to add to the spead headers of the FPGA output
         "initial_quantization_factor": 0x012C0000 ,       # initial value for the quantization factor. Can be changed per measurement
