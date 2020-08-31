@@ -1,0 +1,7 @@
+image: edd01:5000/eddbase:latest
+
+
+test:
+  script:
+    - ./test.py
+
