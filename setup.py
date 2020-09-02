@@ -13,13 +13,11 @@ setup(name='mpikat',
           'katcp',
           'ipaddress',
           'katportalclient',
-          'mosaic',
           'posix_ipc',
           'jinja2',
           'coloredlogs'
       ],
       dependency_links=[
           'git+https://github.com/ska-sa/katportalclient.git',
-          'git+https://gitlab.mpifr-bonn.mpg.de/wchen/Beamforming.git' #mosaic
       ],
       zip_safe=False)
