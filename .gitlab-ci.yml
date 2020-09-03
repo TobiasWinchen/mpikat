@@ -1,10 +1,12 @@
 image: edd01:5000/eddbase:latest
 
-
 before_script:
   - apt-get install python-ipaddress
 
-test:
+execute_unit_tests:
   script:
     - ./test.py
+  only:
+    - pushes
+    - merge-request
 
