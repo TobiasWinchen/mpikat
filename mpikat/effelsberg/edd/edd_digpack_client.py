@@ -11,13 +11,17 @@ known_packetizers = {"faraday_room":{"ip":"134.104.73.132","port":7147}, "focus_
 
 log = logging.getLogger("mpikat.edd_digpack_client")
 
+
 class DigitiserPacketiserError(Exception):
     pass
+
 
 class PacketiserInterfaceError(Exception):
     pass
 
+
 class DigitiserPacketiserClient(object):
+
     def __init__(self, host, port=7147):
         """
         @brief      Class for digitiser packetiser client.
@@ -46,7 +50,8 @@ class DigitiserPacketiserClient(object):
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
         if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
+            log.error("'{}' request failed with error: {}".format(
+                request_name, response.reply.arguments[1]))
             raise DigitiserPacketiserError(response.reply.arguments[1])
         else:
             log.debug("'{}' request successful".format(request_name))
@@ -59,14 +64,17 @@ class DigitiserPacketiserClient(object):
         """
         log.debug("Checking status of 40 GbE interfaces")
         yield self._client.until_synced()
+
         @coroutine
         def _check_interface(name):
             log.debug("Checking status of '{}'".format(name))
-            sensor = self._client.sensor['rxs_packetizer_40g_{}_am_lock_status'.format(name)]
+            sensor = self._client.sensor[
+                'rxs_packetizer_40g_{}_am_lock_status'.format(name)]
             status = yield sensor.get_value()
             if not status == 0x0f:
                 log.warning("Interface '{}' in error state".format(name))
-                raise PacketiserInterfaceError("40-GbE interface '{}' did not boot".format(name))
+                raise PacketiserInterfaceError(
+                    "40-GbE interface '{}' did not boot".format(name))
             else:
                 log.debug("Interface '{}' is healthy".format(name))
         yield _check_interface('iface00')
@@ -134,14 +142,13 @@ class DigitiserPacketiserClient(object):
         try:
             args = valid_modes[int(rate)]
         except KeyError as error:
-            msg = "Invalid sampling rate '{}, type: {}', valid sampling rates are: {}".format(rate, type(rate), valid_modes.keys())
             log.error(msg)
             raise DigitiserPacketiserError(msg)
 
         attempts = 0
         while True:
             response = yield self._safe_request("rxs_packetizer_system_reinit", *args)
-            yield sleep(10)
+            yield sleep(20)
             try:
                 yield self._check_interfaces()
             except PacketiserInterfaceError as error:
@@ -169,7 +176,8 @@ class DigitiserPacketiserClient(object):
         try:
             mode = valid_modes[int(nbits)]
         except KeyError as error:
-            msg = "Invalid bit depth, valid bit depths are: {}".format(valid_modes.keys())
+            msg = "Invalid bit depth, valid bit depths are: {}".format(
+                valid_modes.keys())
             log.error(msg)
             raise DigitiserPacketiserError(msg)
         yield self._safe_request("rxs_packetizer_edd_switchmode", mode)
@@ -203,6 +211,37 @@ class DigitiserPacketiserClient(object):
         """
         yield self._safe_request("capture_destination", "v", v_dest)
         yield self._safe_request("capture_destination", "h", h_dest)
+
+    @coroutine
+    def set_predecimation_factor(self, factor):
+        """
+        @brief      Sets the predecimation_factorfor data out of the packetiser
+
+        @param      factor (e.g. 1,2,4,8)
+
+        """
+        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
+
+    @coroutine
+    def set_noise_diode_firing(self, fraction, cycle_length):
+        """
+        @brief      Sets the noise_diode firing fraction
+
+        @param      factor (e.g. 0, 0.5, 1)
+
+        """
+        yield self._safe_request("noise_source", "now", fraction, cycle_length)
+
+
+    @coroutine
+    def set_flipsignalspectrum(self, value):
+        """
+        @brief      Sets the rxs-packetizer-edd-flipsignalspectrum data out of the packetiser
+
+        @param      value (e.g. 0, 1)
+
+        """
+        yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", value)
 
     @coroutine
     def set_interface_address(self, intf, ip):
@@ -315,11 +354,12 @@ class DigitiserPacketiserClient(object):
                     set the
         """
         if not unix_time:
-            unix_time = round(time.time()+2)
+            unix_time = round(time.time() + 2)
         yield self._safe_request("synchronise", 0, unix_time)
         sync_epoch = yield self.get_sync_time()
         if sync_epoch != unix_time:
-            log.warning("Requested sync time {} not equal to actual sync time {}".format(unix_time, sync_epoch))
+            log.warning("Requested sync time {} not equal to actual sync time {}".format(
+                unix_time, sync_epoch))
 
     @coroutine
     def populate_data_store(self, host, port):

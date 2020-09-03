@@ -274,6 +274,7 @@ class EDDPipeline(AsyncDeviceServer):
         @ToDo: Potentially obsolete ??
         """
         log.info(stderr)
+        log.debug('{}'.format(str(stderr)))
 
 
     def _subprocess_error(self, proc):
