@@ -6,7 +6,7 @@ before_script:
 execute_unit_tests:
   script:
     - ./test.py
-  only:
-    - pushes
-    - merge-request
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push"'
 
