@@ -42,7 +42,7 @@ class Effelsberg_metadata_listener(AsyncDeviceServer):
         self._scannum_callback.start()
         self._scannum = None
         self._scannum_now = None
-	self._first_scannum = True
+        self._first_scannum = True
 
     @coroutine
     def check_scannum(self):
@@ -50,22 +50,22 @@ class Effelsberg_metadata_listener(AsyncDeviceServer):
         @brief check scan number every x ms
 
         """
-	status_dict = json.loads(self._status_server.as_json())
+        status_dict = json.loads(self._status_server.as_json())
         self._scannum_new = status_dict["scannum"]
-	if self._scannum_new == self._scannum:
+        if self._scannum_new == self._scannum:
             pass
         else:
             self._scannum = self._scannum_new
             json_string = json.dumps({"source_config": {"source-name": "{}".format(status_dict["source-name"]), "nchannels": 1024, "nbins": 1024, "ra": status_dict["ra"], "dec": status_dict["dec"]}})
-	    if self._first_scannum != True:
-		log.info("Sending {} to the EDD master contoller".format(json_string))
-		self._master_controller.measurement_prepare(json_string)
-	    self._first_scannum = False
+            if self._first_scannum != True:
+                log.info("Sending {} to the EDD master contoller".format(json_string))
+                self._master_controller.measurement_prepare(json_string)
+            self._first_scannum = False
 
     @coroutine
     def start(self):
         super(Effelsberg_metadata_listener, self).start()
-	self._status_server.start()
+        self._status_server.start()
     @coroutine
     def stop(self):
         yield super(Effelsberg_metadata_listener, self).stop()
