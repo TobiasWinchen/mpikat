@@ -4,13 +4,16 @@ import sys
 import shlex
 import shutil
 import os
+import base64
+import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from subprocess import Popen, PIPE
+from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply, KATCPClientResource
+from katcp.kattypes import request, return_reply, Str
 
 log = logging.getLogger(
-    "mpikat.effelsberg.edd.pipeline.archive_directory_monitor")
-
+    "mpikat.effelsberg.edd.pipeline.pipeline")
 
 class ArchiveAdder(FileSystemEventHandler):
 
@@ -43,13 +46,24 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
-            self._syscall("psrplot -p time -D {}/fscrunch.png/png sum.fscrunch".format(self.output_dir))
-            self._syscall("psrplot -p freq -D {}/tscrunch.png/png sum.tscrunch".format(self.output_dir))
-
+            #log.debug("psrplot -p time -D {}/fscrunch.png/png sum.fscrunch".format(self.output_dir))
+            #log.debug("psrplot -p freq -D {}/tscrunch.png/png sum.tscrunch".format(self.output_dir))
+            #self._syscall("psrplot -p time -D ../combined_data/fscrunch.png/png sum.fscrunch".format(self.output_dir))
+            #self._syscall("psrplot -p freq -D ../combined_data/tscrunch.png/png sum.tscrunch".format(self.output_dir))
+            #self._syscall("psrplot -p flux -D ../combined_data/profile.png/png sum.fscrunch".format(self.output_dir))
+            self._syscall(
+                "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
+            #self._syscall("pav -TGpd sum.tscrunch -g ../combined_data/tscrunch.png/png")
+            self._syscall(
+                "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
+            self._syscall(
+                "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
+            log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
-        shutil.copy2("sum.fscrunch", self.output_dir)
-        shutil.copy2("sum.tscrunch", self.output_dir)
-
+            #shutil.copy2("sum.fscrunch", self.output_dir)
+            #shutil.copy2("sum.tscrunch", self.output_dir)
+        log.info("Accessing archive PNG files")
+            
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
         try:
@@ -58,6 +72,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
+                time.sleep(1) 
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
@@ -91,7 +106,7 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
     logger = logging.getLogger(
-        'mpikat.effelsberg.edd.pipeline.archive_directory_monitor')
+        'mpikat.effelsberg.edd.pipeline.pipeline')
     logging.basicConfig(format=FORMAT)
     logger.setLevel(logging.DEBUG)
 
@@ -106,6 +121,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", type=str,
                         help="Processing mode to operate in",
                         default="ArchiveAdder")
+
     args = parser.parse_args()
 
     if args.mode == "ArchiveAdder":
