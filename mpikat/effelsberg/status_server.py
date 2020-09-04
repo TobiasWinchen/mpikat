@@ -5,7 +5,7 @@ import select
 import json
 import coloredlogs
 import signal
-from lxml import etree
+from xml import etree
 from threading import Thread, Event, Lock
 from tornado.gen import coroutine
 from tornado.ioloop import PeriodicCallback, IOLoop
