@@ -236,7 +236,7 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall(
                 "paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
             self._syscall(
-                "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
+                "psrplot -p freq+ -jDp -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
                 "pav -DFTp sum.fscrunch  -g ../combined_data/profile.png/png")
             #-y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'` trying to grab the no of intergrations, failed
