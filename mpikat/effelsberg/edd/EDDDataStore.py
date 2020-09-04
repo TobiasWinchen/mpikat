@@ -139,3 +139,19 @@ class EDDDataStore:
         else:
             log.warning("Unknown data format: - {}".format(key))
             return {}
+
+
+    def addTelescopeDataItem(self, key, pars):
+        pars['value'] = pars['default']
+        try:
+            self._telescopeMetaData.hmset(key, pars)
+        except Exception as E:
+            log.error("Error setting {}".format(key))
+
+    def setTelescopeDataItem(self, key, value):
+        self._telescopeMetaData.hset(key, "value", value)
+
+
+if __name__ == "__main__":
+    store = EDDDataStore("localhost")
+    store.setTelescopeDataItem("foo", "bar")

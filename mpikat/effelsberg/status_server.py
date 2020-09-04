@@ -14,6 +14,7 @@ from katcp.kattypes import request, return_reply, Int, Str
 from mpikat.effelsberg.status_config import EFF_JSON_CONFIG
 
 from mpikat.effelsberg.edd.pipeline import EDDPipeline
+from mpikat.effelsberg.edd import EDDDataStore
 
 
 
@@ -130,7 +131,11 @@ class JsonStatusServer(AsyncDeviceServer):
                  mcast_group=JSON_STATUS_MCAST_GROUP,
                  mcast_port=JSON_STATUS_PORT,
                  parser=EFF_JSON_CONFIG,
+                 redis_ip ="localhost",
+                 redis_port=6379,
                  dummy=False):
+
+        self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
         self._mcast_group = mcast_group
         self._mcast_port = mcast_port
         self._parser = parser
@@ -155,7 +160,9 @@ class JsonStatusServer(AsyncDeviceServer):
             if name in self._controlled:
                 continue
             if "updater" in params:
-                self._sensors[name].set_value(params["updater"](data))
+                value = params["updater"](data)
+                self._sensors[name].set_value(value)
+                self.__eddDataStore.setTelescopeDataItem(name, value)
 
     def start(self):
         """start the server"""
@@ -276,6 +283,7 @@ class JsonStatusServer(AsyncDeviceServer):
             param = self._parser[name]
             value = TYPE_CONVERTER[param["type"]](value)
             self._sensors[name].set_value(value)
+            self.__eddDataStore.setTelescopeDataItem(name, value)
         except Exception as error:
             return ("fail", str(error))
         else:
@@ -287,6 +295,12 @@ class JsonStatusServer(AsyncDeviceServer):
         """Set up basic monitoring sensors.
         """
         for name, params in self._parser.items():
+            v = params.copy()
+            v.pop('updater')
+            if 'range' in v: 
+                v.pop('range')
+
+            self.__eddDataStore.addTelescopeDataItem(name, v)
             if params["type"] == "float":
                 sensor = Sensor.float(
                     name,
@@ -322,9 +336,13 @@ class JsonStatusServer(AsyncDeviceServer):
 
 if __name__ == "__main__":
     parser = EDDPipeline.getArgumentParser()
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
+                      help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
+                      help='The port number for the redis server')
 
     args = parser.parse_args()
 
-    server = JsonStatusServer(args.host, args.port)
+    server = JsonStatusServer(args.host, args.port, redis_port=args.redis_port, redis_ip=args.redis_ip)
     EDDPipeline.launchPipelineServer(server, args)
 
