@@ -48,7 +48,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     VERSION_INFO = ("mpikat-edd-api", 0, 2)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 2, "rc1")
 
-    def __init__(self, ip, port, redis_ip, redis_port, edd_ansible_git_repository_folder):
+    def __init__(self, ip, port, redis_ip, redis_port, edd_ansible_git_repository_folder, inventory):
         """
         @brief       Construct new EddMasterController instance
 
@@ -59,30 +59,18 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         @params  edd_ansible_git_repository_folder
                               Directory of a (checked out) edd_ansible git
                               repository to be used for provisioning
+        @params inventory to use for ansible
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port)
+        EDDPipeline.EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port), "skip_packetizer_config":False})
+
         self.__controller = {}
         self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
         self.__edd_ansible_git_repository_folder = edd_ansible_git_repository_folder
+        self.__inventory = inventory
         if not os.path.isdir(self.__edd_ansible_git_repository_folder):
             log.warning("{} is not a readable directory".format(self.__edd_ansible_git_repository_folder))
 
         self.__provisioned = None
-
-    def setup_sensors(self):
-        """
-        @brief    Set up all sensors on the server
-
-        @note     This is an internal method and is invoked by
-                  the constructor of the base class.
-        """
-        EDDPipeline.EDDPipeline.setup_sensors(self)
-        self._edd_config_sensor = Sensor.string(
-        "current-config",
-        description="The current configuration for the EDD backend",
-        default="",
-        initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._edd_config_sensor)
 
 
     @request()
@@ -148,6 +136,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         @param   config_json    A JSON dictionary object containing configuration information
 
+        @param   The following global configuration option can be set in the configuration:
+            "data_store" = {"ip": "aaa.bbb.ccc.ddd", port:6347}
+
         """
         log.info("Configuring EDD backend for processing")
 
@@ -171,8 +162,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         else:
             EDDPipeline.EDDPipeline.set(self, cfg)
 
-
-
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
@@ -188,7 +177,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         # Get output streams from packetizer and configure packetizer
         log.info("Configuring digitisers/packetisers")
         for packetizer in self._config['packetizers'].itervalues():
-            yield self.__controller[packetizer["id"]].configure(packetizer)
+            if self._config["skip_packetizer_config"]:
+                log.warning("Skipping packetizer configuration as requested in config!")
+            else:
+                yield self.__controller[packetizer["id"]].configure(packetizer)
 
             ofs = dict(format="MPIFR_EDD_Packetizer",
                         sample_rate=float(packetizer["sampling_rate"]) / int(packetizer["predecimation_factor"]),
@@ -260,6 +252,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
         for product in self._config["products"].itervalues():
+            #inject global data store values into product configuration
+            product["data_store"] = self._config["data_store"]
             yield self.__controller[product['id']].configure(product)
 
         self._edd_config_sensor.set_value(json.dumps(self._config))
@@ -398,7 +392,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             raise FailReply("cannot find config file {}".format(basic_config_file))
 
         try:
-            yield command_watcher("ansible-playbook {}".format(playbook_file),
+            yield command_watcher("ansible-playbook -i {} {}".format(self.__inventory, playbook_file),
                     env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
                         "roles")})
         except Exception as E:
@@ -418,7 +412,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
-        self._config = {"products":{}, "packetizers":basic_config['packetizers']}
+        self._config = self._default_config.copy()
+        self._config["products"] = {}
+        self._config["packetizers"] = basic_config['packetizers']
+
         for product in basic_config['products'].itervalues():
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
@@ -519,7 +516,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Deprovision {}".format(self.__provisioned))
         if self.__provisioned:
             try:
-                yield command_watcher("ansible-playbook -{} --tags=stop".format(self.__provisioned),
+                yield command_watcher("ansible-playbook -i {} {} --tags=stop".format(self.__inventory, self.__provisioned),
                         env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
                             "roles")})
             except Exception as E:
@@ -538,9 +535,13 @@ if __name__ == "__main__":
                       help='The port number for the redis server')
 
     parser.add_argument('--edd_ansible_repository', dest='edd_ansible_git_repository_folder', type=str, default=os.path.join(os.getenv("HOME"), "edd_ansible"), help='The path to a git repository for the provisioning data')
+
+    parser.add_argument('--edd_ansible_inventory', dest='inventory', type=str,
+            default="effelsberg", help='The inventory to use with the ansible setup')
+    args = parser.parse_args()
     args = parser.parse_args()
 
     server = EddMasterController(
         args.host, args.port,
-        args.redis_ip, args.redis_port, args.edd_ansible_git_repository_folder)
+        args.redis_ip, args.redis_port, args.edd_ansible_git_repository_folder, args.inventory)
     EDDPipeline.launchPipelineServer(server, args)

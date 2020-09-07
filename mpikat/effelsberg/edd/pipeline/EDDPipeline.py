@@ -146,6 +146,9 @@ class EDDPipeline(AsyncDeviceServer):
         self._state = "idle"
         self.previous_state = "unprovisioned"
         self._sensors = []
+        # inject data store dat into all default configs.
+        if "data_store" not in default_config:
+            default_config["data_store"] = dict(ip="localhost", port=6379)
         self.__config = default_config.copy()
         self._default_config = default_config
         self._subprocesses = []
