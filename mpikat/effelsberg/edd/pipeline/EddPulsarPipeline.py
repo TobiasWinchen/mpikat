@@ -65,6 +65,7 @@ DEFAULT_CONFIG = {
     "epta_directory": "epta",                       # Data will be read from /mnt/epta_directory
     "nchannels": 1024,
     "nbins": 1024,
+    "tempo2_telescope_name": "Effelsberg",
     "input_data_streams":
     {
         "polarization_0":
@@ -101,7 +102,6 @@ DEFAULT_CONFIG = {
     "dada_header_params":
     {
         "filesize": 32000000000,
-        "telescope": "Effelsberg",
         "instrument": "EDD",
         "receiver_name": "P217",
         "mode": "PSR",
@@ -526,6 +526,7 @@ class EddPulsarPipeline(EDDPipeline):
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
         c = SkyCoord("{} {}".format(ra, decl), unit=(u.deg, u.deg))
         header = self._config["dada_header_params"]
+        header["telescope"] = self._config["tempo2_telescope_name"]
         header["ra"] = c.to_string("hmsdms").split(" ")[0].replace(
             "h", ":").replace("m", ":").replace("s", "")
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
@@ -582,9 +583,7 @@ class EddPulsarPipeline(EDDPipeline):
                 self.numa_number, self.__core_sets['single'],
                 epta_file).split()
 
-            # ToDo: Hardcoded values for Effelsberg have to go
-            cmd.append("Effelsberg {} {} {} {} 24 2 3599.999999999".format(Time.now().mjd - 1, Time.now().mjd + 1, float(
-                central_freq) - 200, float(central_freq) + 200))
+            cmd.append("{} {} {} {} {} 24 2 3599.999999999".format(self._config["tempo2_telescope_name"], Time.now().mjd - 1, Time.now().mjd + 1, float(central_freq) - 200, float(central_freq) + 200))
             log.debug("Command to run: {}".format(cmd))
             yield command_watcher(cmd, )
             attempts = 0
