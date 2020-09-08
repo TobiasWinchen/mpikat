@@ -129,18 +129,6 @@ DEFAULT_CONFIG = {
     }
 }
 
-"""
-Central frequency of each band should be with BW of 162.5
-239.2.1.150 2528.90625
-239.2.1.151 2366.40625
-239.2.1.152 2203.9075
-239.2.1.153 2041.40625
-239.2.1.154 1878.90625
-239.2.1.155 1716.405
-239.2.1.156 1553.9075
-239.2.1.157 1391.40625
-"""
-
 
 def is_accessible(path, mode='r'):
     """
@@ -205,7 +193,6 @@ class ArchiveAdder(FileSystemEventHandler):
             self.time_zap_list = str(
                 self.time_zap_list) + " {}".format(zaplist.split(":")[item])
 
-        #self.time_zap_list = self.time_zap_list.replace(":", " ")
         log.info("Latest time zaplist {}".format(self.time_zap_list))
 
     def process(self, fname):
@@ -230,7 +217,6 @@ class ArchiveAdder(FileSystemEventHandler):
                 "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
                 "pav -DFTp sum.fscrunch  -g ../combined_data/profile.png/png")
-            #-y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'` trying to grab the no of intergrations, failed
             self._syscall(
                 "pav -FYp sum.fscrunch  -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
@@ -367,14 +353,6 @@ class EddPulsarPipeline(EDDPipeline):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-#        if "F1" in values:
-#            spin_period = 1000.0 / float(values["F"])
-#            self._spin_period.set_value(spin_period) # spin period in ms
-#        if "DM" in values:
-#            self._dm.set_value(float(values["DM"]))
-#        if "PB" in values:
-#            self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
-
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -449,10 +427,6 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Running command: {0}".format(cmd))
         yield command_watcher(cmd)
 
-        #M = DbMonitor(key, self._buffer_status_handle)
-        # M.start()
-        #self._dada_buffers.append({'key': key, 'monitor': M})
-
 
     @coroutine
     def _reset_ring_buffer(self, key, numa_node):
@@ -508,9 +482,6 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Pipeline configured")
 
 
-
-
-
     @coroutine
     def measurement_prepare(self, config_json):
         log.info("checking status")
@@ -525,7 +496,7 @@ class EddPulsarPipeline(EDDPipeline):
                 return
         self._subprocessMonitor = SubprocessMonitor()
         self.state = "measurement_starting"
-        #
+
         self._source_name = self.__eddDataStore.getTelescopeDataItem("source-name")
         ra = self.__eddDataStore.getTelescopeDataItem("ra")
         decl = self.__eddDataStore.getTelescopeDataItem("decl")
@@ -533,8 +504,8 @@ class EddPulsarPipeline(EDDPipeline):
 
         central_freq = self._config['input_data_streams'][
             'polarization_0']["central_freq"]
-        #Check if source is a pulsar or calibrator, if not error
 
+        #Check if source is a pulsar or calibrator, if not error
         epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
         log.debug("Checking epta file {}".format(epta_file))
         self.pulsar_flag = is_accessible(epta_file)
@@ -584,6 +555,7 @@ class EddPulsarPipeline(EDDPipeline):
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
+
         ####################################################
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
@@ -606,7 +578,6 @@ class EddPulsarPipeline(EDDPipeline):
             raise EddPulsarPipelineError(str(error))
 
         os.chdir("/tmp/")
-
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
@@ -635,23 +606,6 @@ class EddPulsarPipeline(EDDPipeline):
                         break
                     else:
                         attempts += 1
-
-        #porting pulsar pars to katcp sensors by reading the par file.
-        #values = {}
-        #with open(epta_file) as fh:
-        #    for line in fh:
-        #        par, value = filter(None, line.strip().split(' '))[0:2]
-        #        values[par] = value.strip()
-        #if "F" in values:
-        #    spin_period = 1000.0 / float(values["F"])
-        #    self._spin_period.set_value(spin_period) # spin period in ms
-        #if "F1" in values:
-        #    spin_period = 1000.0 / float(values["F1"])
-        #    self._spin_period.set_value(spin_period) # spin period in ms
-        #if "DM" in values:
-        #    self._dm.set_value(float(values["DM"]))
-        #if "PB" in values:
-        #    self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
 
         self.dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
@@ -737,43 +691,15 @@ class EddPulsarPipeline(EDDPipeline):
                     cpus=",".join(self.__core_sets['dspsr']),
                     cuda_number=self.cuda_number,
                     keyfile=self.dada_key_file.name)
-#        elif parse_tag(self._source_name) == "FB":
-#            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
-#                numa=self.numa_number,
-# nchan="{}".format(self._config["nchan"]),
-#                nbin="{}".format(self._config["nbins"]),
-#                cpus=self.cpu_numbers,
-#                keyfile=self.dada_key_file.name)
-#        else:
-#            error = "source is unknown"
-#            raise EddPulsarPipelineError(error)
-#"""
-#        elif (parse_tag(self._source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
-#            if (self._source_name[:2] == "3C" and self._source_name[-3:] == "O_R") or (self._source_name[:3] == "NGC" and self._source_name[-4:]=="ON_R"):
-#                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
-#                    numa=self.numa_number,
-#                    args=self._config["dspsr_params"]["args"],
-#                    nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
-#                    name=self._source_name,
-#                    cpus=self.cpu_numbers,
-#                    self.cuda_number=self.cuda_number,
-#                    keyfile=dada_key_file.name)
-#            elif (self._source_name[:3] == "NGC" and self._source_name[-5:] == "OFF_R") or (self._source_name[:2] == "3C" and self._source_name[-3:] == "N_R") or (self._source_name[:2] == "3C" and self._source_name[-3:] == "S_R"):
-#                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
-#                    numa=self.numa_number,
-#                    args=self._config["dspsr_params"]["args"],
-#                    nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
-#                    name=self._source_name,
-#                    cpus=self.cpu_numbers,
-#                    self.cuda_number=self.cuda_number,
-#                    keyfile=dada_key_file.name)
-#"""
+        else:
+            error = "source is unknown"
+            raise EddPulsarPipelineError(error)
 
-        #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
         self._dspsr = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
+
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
@@ -784,6 +710,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._polnmerge_proc = ManagedProcess(cmd)
         self._subprocessMonitor.add(
             self._polnmerge_proc, self._subprocess_error)
+
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
@@ -794,12 +721,10 @@ class EddPulsarPipeline(EDDPipeline):
         self._mkrecv_ingest_proc = ManagedProcess(cmd)
         self._subprocessMonitor.add(
             self._mkrecv_ingest_proc, self._subprocess_error)
+
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        # cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-        #    self.in_path, self.out_path)
-        #log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self.archive_observer = Observer()
         self.archive_observer.daemon = False
@@ -807,16 +732,12 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Output directory: {}".format(self.out_path))
         log.info("Setting up ArchiveAdder handler")
         self.handler = ArchiveAdder(self.out_path)
-#        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
-#        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
+
         self.archive_observer.schedule(
             self.handler, self.in_path, recursive=False)
         log.info("Starting directory monitor")
         self.archive_observer.start()
 
-        #self._archive_directory_monitor = ManagedProcess(cmd)
-        # self._subprocessMonitor.add(
-        #    self._archive_directory_monitor, self._subprocess_error)
         self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
             self._png_monitor, 5000)
         self._png_monitor_callback.start()
@@ -864,13 +785,9 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Destroying dada buffers")
 
         for k in self._dada_buffers:
-            # k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
             yield command_watcher(cmd)
-        # self._fscrunch.set_value(BLANK_IMAGE)
-        # self._tscrunch.set_value(BLANK_IMAGE)
-        # self._profile.set_value(BLANK_IMAGE)
         log.info("Deconfigured pipeline")
         self._state = "idle"
 
