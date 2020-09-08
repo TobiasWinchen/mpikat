@@ -63,6 +63,8 @@ DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
     "epta_directory": "epta",                       # Data will be read from /mnt/epta_directory
+    "nchannels": 1024,
+    "nbins": 1024,
     "input_data_streams":
     {
         "polarization_0":
@@ -95,14 +97,6 @@ DEFAULT_CONFIG = {
             "predecimation_factor": 2,
             "central_freq": 1200,
         }
-    },
-    "source_config":  # this should be passed in measurement-prepare
-    {
-        "source-name": "J1939+2134",
-        "nchannels": 1024,
-        "nbins": 1024,
-        "ra": "294.910416667",
-        "dec": "21.10725"
     },
     "dada_header_params":
     {
@@ -146,9 +140,6 @@ Central frequency of each band should be with BW of 162.5
 239.2.1.156 1553.9075
 239.2.1.157 1391.40625
 """
-
-sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
-           "scannum": 0, "subscannum": 1}
 
 
 def is_accessible(path, mode='r'):
@@ -509,8 +500,15 @@ class EddPulsarPipeline(EDDPipeline):
             log.error("Not a directory {} !".format(self.epta_dir))
             raise RuntimeError("Epta directory is no directory: {}".format(self.epta_dir))
 
+        # The master contoller provides the data store IP as default gloal
+        # config to all pipelines
+        self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
+
         self.state = "ready"
         log.info("Pipeline configured")
+
+
+
 
 
     @coroutine
@@ -527,13 +525,12 @@ class EddPulsarPipeline(EDDPipeline):
                 return
         self._subprocessMonitor = SubprocessMonitor()
         self.state = "measurement_starting"
-        config_json = json.loads(config_json)
-        cfs = json.dumps(config_json, indent=4)
-        log.info("Final configuration:\n" + cfs)
         #
-        self._source_name = config_json["source-name"]
-        self.nchan = config_json["nchannels"]
-        self.nbins = config_json["nbins"]
+        self._source_name = self.__eddDataStore.getTelescopeDataItem("source-name")
+        ra = self.__eddDataStore.getTelescopeDataItem("ra")
+        decl = self.__eddDataStore.getTelescopeDataItem("decl")
+        log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
+
         central_freq = self._config['input_data_streams'][
             'polarization_0']["central_freq"]
         #Check if source is a pulsar or calibrator, if not error
@@ -543,7 +540,7 @@ class EddPulsarPipeline(EDDPipeline):
         self.pulsar_flag = is_accessible(epta_file)
         if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
             if (parse_tag(self._source_name) != "FB"):
-                error = "source is not pulsar or calibrator"
+                error = "source {} is not pulsar or calibrator".format(self._source_name)
                 raise EddPulsarPipelineError(error)
 
         log.info("starting pipeline")
@@ -558,12 +555,11 @@ class EddPulsarPipeline(EDDPipeline):
         #writing mkrecv header
         self._central_freq.set_value(str(central_freq))
         self._source_name_sensor.set_value(self._source_name)
-        self._nchannels.set_value(self.nchan)
-        self._nbins.set_value(self.nbins)
+        self._nchannels.set_value(self._config["nchan"])
+        self._nbins.set_value(self._config["nbins"])
 
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
-        c = SkyCoord("{} {}".format(self._config['source_config'][
-                     "ra"], self._config['source_config']["dec"]), unit=(u.deg, u.deg))
+        c = SkyCoord("{} {}".format(ra, decl), unit=(u.deg, u.deg))
         header = self._config["dada_header_params"]
         header["ra"] = c.to_string("hmsdms").split(" ")[0].replace(
             "h", ":").replace("m", ":").replace("s", "")
@@ -721,59 +717,57 @@ class EddPulsarPipeline(EDDPipeline):
         epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
         if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
-                numa=self.numa_number,
-                args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(self.nchan),
-                nbin="-b {}".format(self.nbins),
-                name=self._source_name,
-                predictor="/tmp/t2pred.dat",
-                parfile=epta_file,
-                cpus=",".join(self.__core_sets['dspsr']),
-                cuda_number=self.cuda_number,
-                keyfile=self.dada_key_file.name)
+                    numa=self.numa_number,
+                    args=self._config["dspsr_params"]["args"],
+                    nchan="-F {}:D".format(self._config["nchan"]),
+                    nbin="-b {}".format(self._config["nbins"]),
+                    name=self._source_name,
+                    predictor="/tmp/t2pred.dat",
+                    parfile=epta_file,
+                    cpus=",".join(self.__core_sets['dspsr']),
+                    cuda_number=self.cuda_number,
+                    keyfile=self.dada_key_file.name)
 
         elif parse_tag(self._source_name) == "R":
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                numa=self.numa_number,
-                args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(
-                    self.nchan),
-                name=self._source_name,
-                cpus=",".join(self.__core_sets['dspsr']),
-                cuda_number=self.cuda_number,
-                keyfile=self.dada_key_file.name)
-
+                    numa=self.numa_number,
+                    args=self._config["dspsr_params"]["args"],
+                    nchan="-F {}:D".format(self._config["nchan"]),
+                    name=self._source_name,
+                    cpus=",".join(self.__core_sets['dspsr']),
+                    cuda_number=self.cuda_number,
+                    keyfile=self.dada_key_file.name)
 #        elif parse_tag(self._source_name) == "FB":
 #            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
 #                numa=self.numa_number,
-# nchan="{}".format(self._config['source_config']["nchannels"]),
-#                nbin="{}".format(self._config['source_config']["nbins"]),
+# nchan="{}".format(self._config["nchan"]),
+#                nbin="{}".format(self._config["nbins"]),
 #                cpus=self.cpu_numbers,
 #                keyfile=self.dada_key_file.name)
-        else:
-            error = "source is unknown"
-            raise EddPulsarPipelineError(error)
-        """
-        elif (parse_tag(self._source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
-            if (self._source_name[:2] == "3C" and self._source_name[-3:] == "O_R") or (self._source_name[:3] == "NGC" and self._source_name[-4:]=="ON_R"):
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
-                    numa=self.numa_number,
-                    args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
-                    name=self._source_name,
-                    cpus=self.cpu_numbers,
-                    self.cuda_number=self.cuda_number,
-                    keyfile=dada_key_file.name)
-            elif (self._source_name[:3] == "NGC" and self._source_name[-5:] == "OFF_R") or (self._source_name[:2] == "3C" and self._source_name[-3:] == "N_R") or (self._source_name[:2] == "3C" and self._source_name[-3:] == "S_R"):
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
-                    numa=self.numa_number,
-                    args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
-                    name=self._source_name,
-                    cpus=self.cpu_numbers,
-                    self.cuda_number=self.cuda_number,
-                    keyfile=dada_key_file.name)
-        """
+#        else:
+#            error = "source is unknown"
+#            raise EddPulsarPipelineError(error)
+#"""
+#        elif (parse_tag(self._source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
+#            if (self._source_name[:2] == "3C" and self._source_name[-3:] == "O_R") or (self._source_name[:3] == "NGC" and self._source_name[-4:]=="ON_R"):
+#                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
+#                    numa=self.numa_number,
+#                    args=self._config["dspsr_params"]["args"],
+#                    nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
+#                    name=self._source_name,
+#                    cpus=self.cpu_numbers,
+#                    self.cuda_number=self.cuda_number,
+#                    keyfile=dada_key_file.name)
+#            elif (self._source_name[:3] == "NGC" and self._source_name[-5:] == "OFF_R") or (self._source_name[:2] == "3C" and self._source_name[-3:] == "N_R") or (self._source_name[:2] == "3C" and self._source_name[-3:] == "S_R"):
+#                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
+#                    numa=self.numa_number,
+#                    args=self._config["dspsr_params"]["args"],
+#                    nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
+#                    name=self._source_name,
+#                    cpus=self.cpu_numbers,
+#                    self.cuda_number=self.cuda_number,
+#                    keyfile=dada_key_file.name)
+#"""
 
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))

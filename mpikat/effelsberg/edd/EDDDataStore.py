@@ -151,7 +151,10 @@ class EDDDataStore:
     def setTelescopeDataItem(self, key, value):
         self._telescopeMetaData.hset(key, "value", value)
 
+    def getTelescopeDataItem(self, key):
+        return self._telescopeMetaData.hget(key, "value")
 
 if __name__ == "__main__":
     store = EDDDataStore("localhost")
     store.setTelescopeDataItem("foo", "bar")
+    print (store.getTelescopeDataItem("foo"))
