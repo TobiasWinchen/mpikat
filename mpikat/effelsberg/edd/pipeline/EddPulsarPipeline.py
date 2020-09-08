@@ -26,22 +26,16 @@ import mpikat.utils.numa as numa
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 from mpikat.effelsberg.edd.pipeline.dada_rnt import render_dada_header, make_dada_key_string
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
 from mpikat.effelsberg.edd.pipeline.EddPulsarPipeline_blank_image import BLANK_IMAGE
 
 import logging
-import sys
 import shlex
 import shutil
 import os
 import base64
-import time
 from subprocess import Popen, PIPE
-import logging
 import tempfile
 import json
-import os
-import time
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -54,7 +48,7 @@ from katcp import Sensor
 from katcp.kattypes import request, return_reply, Int, Str
 
 import tornado
-from tornado.gen import coroutine
+from tornado.gen import coroutine, sleep
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
@@ -226,7 +220,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
-                time.sleep(1)
+                sleep(1)
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
@@ -593,7 +587,7 @@ class EddPulsarPipeline(EDDPipeline):
                     error = "could not read t2pred.dat"
                     raise EddPulsarPipelineError(error)
                 else:
-                    time.sleep(1)
+                    sleep(1)
                     if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
                         log.debug('found {}/t2pred.dat'.format(os.getcwd()))
                         break
@@ -632,7 +626,7 @@ class EddPulsarPipeline(EDDPipeline):
                 error = "could not read dada_key_file"
                 raise EddPulsarPipelineError(error)
             else:
-                time.sleep(1)
+                sleep(1)
                 if is_accessible('{}'.format(self.dada_key_file.name)):
                     log.debug('found {}'.format(self.dada_key_file.name))
                     break
