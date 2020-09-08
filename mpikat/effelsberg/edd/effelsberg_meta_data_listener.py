@@ -56,8 +56,6 @@ class Effelsberg_metadata_listener(EDDPipeline.EDDPipeline):
             self._last_scannum = current_scan_number
             self._master_controller.measurement_prepare()
 
-            #json_string = json.dumps({"source_config": {"source-name": "{}".format(status_dict["source-name"]), "nchannels": 1024, "nbins": 1024, "ra": status_dict["ra"], "dec": status_dict["dec"]}})
-            #self._master_controller.measurement_prepare(json_string)
 
     @coroutine
     def configure(self, cfg):

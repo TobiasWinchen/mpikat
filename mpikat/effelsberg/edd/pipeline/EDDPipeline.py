@@ -729,6 +729,7 @@ def launchPipelineServer(Pipeline, args=None):
 
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting Pipeline instance")
+    log.info("Accepting connections from: {}:{}".format(args.host, args.port))
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, server))
@@ -737,9 +738,7 @@ def launchPipelineServer(Pipeline, args=None):
         log.info("Starting Pipeline server")
         server.start()
         log.debug("Started Pipeline server")
-        log.info(
-            "Listening at {-1}, Ctrl-C to terminate server".format(
-                server.bind_address))
+        log.info("Ctrl-C to terminate server")
 
     ioloop.add_callback(start_and_display)
     ioloop.start()

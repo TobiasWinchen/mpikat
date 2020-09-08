@@ -164,6 +164,7 @@ class JsonStatusServer(AsyncDeviceServer):
                 self._sensors[name].set_value(value)
                 self.__eddDataStore.setTelescopeDataItem(name, value)
 
+    @coroutine
     def start(self):
         """start the server"""
         super(JsonStatusServer, self).start()
@@ -173,6 +174,7 @@ class JsonStatusServer(AsyncDeviceServer):
                 self._update_sensors, 1000, io_loop=self.ioloop)
             self._monitor.start()
 
+    @coroutine
     def stop(self):
         """stop the server"""
         if not self._dummy:
