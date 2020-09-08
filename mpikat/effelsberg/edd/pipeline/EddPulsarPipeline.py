@@ -103,11 +103,7 @@ DEFAULT_CONFIG = {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
         "instrument": "EDD",
-        "frequency_mhz": 1200.0,
         "receiver_name": "P217",
-        "mc_source": "225.0.0.110+3,225.0.0.114+3",
-        "bandwidth": 800,
-        "tsamp": 0.000625,
         "mode": "PSR",
         "nbit": 8,
         "ndim": 1,
@@ -115,8 +111,6 @@ DEFAULT_CONFIG = {
         "nchan": 1,
         "resolution": 1,
         "dsb": 1,
-        "ra": "123",
-        "dec": "-10"
         },
     "dspsr_params":
     {
