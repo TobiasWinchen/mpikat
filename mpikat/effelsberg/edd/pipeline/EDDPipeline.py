@@ -297,6 +297,9 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        D = req.client_connection._get_address()
+        print(type(D))
+        print(D)
 
         @coroutine
         def configure_wrapper():
