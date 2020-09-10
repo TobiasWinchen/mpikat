@@ -69,13 +69,13 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.150+3",
+            "ip": "225.0.0.110+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
-            "sync_time": 1581164788.0,
+            "sync_time": 1599749491.0,
             "samples_per_heap": 4096,
-            "band_flip": 0,
+            "band_flip": 1,
             "predecimation_factor": 2,
             "central_freq": 1200
         },
@@ -84,11 +84,11 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.154+3",
+            "ip": "225.0.0.114+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
-            "sync_time": 1581164788.0,
+            "sync_time": 1599749491.0,
             "samples_per_heap": 4096,
             "band_flip": 1,
             "predecimation_factor": 2,
@@ -110,12 +110,12 @@ DEFAULT_CONFIG = {
         "tsamp": 0.000625,
         "dsb": 1,
         "heaps_nbytes": 4096,
-        "nindices": 1,
+        "nindices": 2,
         "idx1_step": 4096,
-        "idx2_item": 1,
+        "idx2_item": 2,
         "idx2_list": "0,1",
-        "idx2_mask": "IDX2_MASK   0x1",
-        "slot_skip": 32,
+        "idx2_mask": "0x1",
+        "slots_skip": 32,
         "dada_nslots": 4,
         },
     "dspsr_params":
@@ -149,7 +149,7 @@ DEFAULT_CONFIG = {
             "port": "60001",
             "bit_depth": 8,
             "sample_rate": 3200000000,
-            "sync_time": 1581164788.0,
+            "sync_time": 1599747241.0,
             "samples_per_heap": 262144,
             "band_flip": 1,
             "predecimation_factor": 2,
@@ -172,11 +172,11 @@ DEFAULT_CONFIG = {
         "dsb": 1,
         "heaps_nbytes": 262144,
         "nindices": 2,
-        "idx1_step": 262144,
+        "idx1_step": 1048576,
         "idx2_item": 2,
         "idx2_list": "32,40,48,56",
-        "idx2_mask": "",
-        "slot_skip": 8,
+        "idx2_mask": "unset",
+        "slots_skip": 8,
         "dada_nslots": 4,
         },
     "dspsr_params":
@@ -600,7 +600,11 @@ class EddPulsarPipeline(EDDPipeline):
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
             "d", ":").replace("m", ":").replace("s", "")
         header["key"] = self._dada_buffers[0]
-        header["mc_source"] = self._config['input_data_streams']['polarization_0'][
+        if header["instrument"] == "SKARAB": 
+            header["mc_source"] = self._config['input_data_streams']['polarization_0'][
+            "ip"]
+        else:
+            header["mc_source"] = self._config['input_data_streams']['polarization_0'][
             "ip"] + "," + self._config['input_data_streams']['polarization_1']["ip"]
         header["frequency_mhz"] = central_freq
         bandwidth = self._config['input_data_streams']['polarization_0'][
@@ -765,7 +769,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING EDDPolnMerge                             #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-            numa=self.numa_number, cpu=self.__core_sets['single'], merge_application=self.config["merge_application"], npart=self.config["npart"])
+            numa=self.numa_number, cpu=self.__core_sets['single'], merge_application=self._config["merge_application"], npart=self._config["npart"])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
