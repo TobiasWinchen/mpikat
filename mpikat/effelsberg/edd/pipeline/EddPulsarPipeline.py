@@ -128,68 +128,6 @@ DEFAULT_CONFIG = {
         "number": 32
     }
 }
-"""
-DEFAULT_CONFIG = {
-    "id": "PulsarPipeline",
-    "type": "PulsarPipeline",
-    "epta_directory": "epta",                       # Data will be read from /mnt/epta_directory
-    "nchannels": 1024,
-    "nbins": 1024,
-    "tempo2_telescope_name": "Effelsberg",
-    "merge_application": "edd_roach_merge",
-    "npart": 4,
-    "input_data_streams":
-    {
-        "polarization_0":
-        {
-            "source": "",
-            "description": "",
-            "format": "MPIFR_EDD_SKRAB",
-            "ip": "239.2.1.156+3",
-            "port": "60001",
-            "bit_depth": 8,
-            "sample_rate": 3200000000,
-            "sync_time": 1599747241.0,
-            "samples_per_heap": 262144,
-            "band_flip": 1,
-            "predecimation_factor": 2,
-            "central_freq": 1393.75
-        }
-    },
-    "dada_header_params":
-    {
-        "filesize": 32000000000,
-        "instrument": "SKARAB",
-        "receiver_name": "P217",
-        "mode": "PSR",
-        "nbit": 8,
-        "ndim": 2,
-        "npol": 2,
-        "nchan": 32,
-        "bandwidth": 400,
-        "resolution": 1,
-        "tsamp": 0.08,
-        "dsb": 1,
-        "heaps_nbytes": 262144,
-        "nindices": 2,
-        "idx1_step": 1048576,
-        "idx2_item": 2,
-        "idx2_list": "32,40,48,56",
-        "idx2_mask": "unset",
-        "slots_skip": 8,
-        "dada_nslots": 4,
-        },
-    "dspsr_params":
-    {
-        "args": "-L 10 -r -minram 1024"
-    },
-    "db_params":
-    {
-        "size": 262144000,
-        "number": 24
-    }
-}
-"""
 
 
 def is_accessible(path, mode='r'):
