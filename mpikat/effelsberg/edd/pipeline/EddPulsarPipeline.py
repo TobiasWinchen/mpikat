@@ -60,6 +60,8 @@ DEFAULT_CONFIG = {
     "nchannels": 1024,
     "nbins": 1024,
     "tempo2_telescope_name": "Effelsberg",
+    "merge_application": "edd_merge",
+    "npart": 2,
     "input_data_streams":
     {
         "polarization_0":
@@ -67,13 +69,13 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.150+3",
+            "ip": "225.0.0.110+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
-            "sync_time": 1581164788.0,
+            "sync_time": 1599749491.0,
             "samples_per_heap": 4096,
-            "band_flip": 0,
+            "band_flip": 1,
             "predecimation_factor": 2,
             "central_freq": 1200
         },
@@ -82,11 +84,11 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.154+3",
+            "ip": "225.0.0.114+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
-            "sync_time": 1581164788.0,
+            "sync_time": 1599749491.0,
             "samples_per_heap": 4096,
             "band_flip": 1,
             "predecimation_factor": 2,
@@ -103,8 +105,18 @@ DEFAULT_CONFIG = {
         "ndim": 1,
         "npol": 2,
         "nchan": 1,
+        "bandwidth": 800,
         "resolution": 1,
+        "tsamp": 0.000625,
         "dsb": 1,
+        "heaps_nbytes": 4096,
+        "nindices": 2,
+        "idx1_step": 4096,
+        "idx2_item": 2,
+        "idx2_list": "0,1",
+        "idx2_mask": "0x1",
+        "slots_skip": 32,
+        "dada_nslots": 4,
         },
     "dspsr_params":
     {
@@ -202,7 +214,7 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall(
                 "paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
             self._syscall(
-                "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
+                "psrplot -p freq+ -jDp -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
                 "pav -DFTp sum.fscrunch  -g ../combined_data/profile.png/png")
             self._syscall(
@@ -528,19 +540,23 @@ class EddPulsarPipeline(EDDPipeline):
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
             "d", ":").replace("m", ":").replace("s", "")
         header["key"] = self._dada_buffers[0]
-        header["mc_source"] = self._config['input_data_streams']['polarization_0'][
+        if header["instrument"] == "SKARAB": 
+            header["mc_source"] = self._config['input_data_streams']['polarization_0'][
+            "ip"]
+        else:
+            header["mc_source"] = self._config['input_data_streams']['polarization_0'][
             "ip"] + "," + self._config['input_data_streams']['polarization_1']["ip"]
         header["frequency_mhz"] = central_freq
         bandwidth = self._config['input_data_streams']['polarization_0'][
             "sample_rate"] / self._config['input_data_streams']['polarization_0']["predecimation_factor"] / 2 / 1e6
-        header["bandwidth"] = bandwidth
+        #header["bandwidth"] = bandwidth
         header["mc_streaming_port"] = self._config[
             'input_data_streams']['polarization_0']["port"]
         header["interface"] = numa.getFastestNic(self.numa_number)[1]['ip']
         header["sync_time"] = self.sync_epoch
         header["sample_clock"] = float(self._config['input_data_streams']['polarization_0'][
                                        "sample_rate"] / self._config['input_data_streams']['polarization_0']["predecimation_factor"])
-        header["tsamp"] = 1 / (2.0 * bandwidth)
+        #header["tsamp"] = 1 / (2.0 * bandwidth)
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format( scannum, subscannum)
         tstr = Time.now().isot.replace(":", "-")
@@ -671,7 +687,7 @@ class EddPulsarPipeline(EDDPipeline):
                     keyfile=self.dada_key_file.name)
 
         elif parse_tag(self._source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
                     nchan="-F {}:D".format(self._config["nchannels"]),
@@ -691,8 +707,8 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_merge --log_level=info".format(
-            numa=self.numa_number, cpu=self.__core_sets['single'])
+        cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
+            numa=self.numa_number, cpu=self.__core_sets['single'], merge_application=self._config["merge_application"], npart=self._config["npart"])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
@@ -738,7 +754,7 @@ class EddPulsarPipeline(EDDPipeline):
 
     @coroutine
     def measurement_stop(self):
-        """@brief stop the dada_junkdb and dspsr instances."""
+        """@brief stop mkrecv merging application and dspsr instances."""
         if self._state != "running":
             log.warning("pipeline is not captureing, can't stop now, current state = {}".format(
                 self._state))
