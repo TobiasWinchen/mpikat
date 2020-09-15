@@ -55,7 +55,16 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         else:
             log.debug("Scan number change detected from {} -> {}".format(self._last_scannum, current_scan_number))
             self._last_scannum = current_scan_number
-            self.__controller.measurement_prepare()
+
+            sourcename = self.__eddDataStore.getTelescopeDataItem("source-name")
+            if sourcename.endswith("_R"):
+
+                log.debug("Source ends with _R, enabling noise diode")
+                cfg = {"set_noise_diode_firing_pattern": {"percentage":0.5, "period":1}}
+            else:
+                log.debug("Source ends not with _R, enabling noise diode")
+                cfg = {"set_noise_diode_firing_pattern": {"percentage":0.0, "period":1}}
+            self.__controller.measurement_prepare(cfg)
 
 
     @scpi_request()

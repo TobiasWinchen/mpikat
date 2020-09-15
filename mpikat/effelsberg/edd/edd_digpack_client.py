@@ -283,7 +283,7 @@ class DigitiserPacketiserClient(object):
         yield self.set_bit_width(config["bit_width"])
         yield self.set_destinations(config["v_destinations"], config["h_destinations"])
         if "noise_diode_frequency" in config:
-            self.set_noise_diode_frequency(config["noise_diode_frequency"])
+            yield self.set_noise_diode_frequency(config["noise_diode_frequency"])
 
         for interface, ip_address in config["interface_addresses"].items():
             yield self.set_interface_address(interface, ip_address)
@@ -311,6 +311,19 @@ class DigitiserPacketiserClient(object):
         """
         """
         raise Return()
+
+    @coroutine
+    def measurement_prepare(self, config = {}):
+        """
+        """
+        if "noise_diode_frequency" in config:
+            yield self.set_noise_diode_frequency(config["noise_diode_frequency"])
+        elif "noise_diode_fireing_pattern" in config:
+            c = config["set_noise_diode_firing_pattern"]
+            yield self.set_noise_diode_firing_pattern(self, c["percentage"], c["period"], start="now")
+
+        raise Return()
+
 
 
     @coroutine

@@ -311,9 +311,15 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     def measurement_prepare(self, config_json=""):
         """"""
         log.debug("Received measurement prepare ... ")
+        try:
+            cfg = json.loads(config_json)
+        except:
+            log.error("Error parsing json")
+            raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
+
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Measurement prepare: {}".format(cid))
-            yield controller.measurement_prepare(config_json)
+            yield controller.measurement_prepare(cfg)
 
 
     @coroutine
