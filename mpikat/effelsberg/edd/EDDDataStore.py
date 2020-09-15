@@ -55,6 +55,9 @@ class EDDDataStore:
 
             facts = json.loads(self._ansible[k])
 
+            if 'ansible_default_ipv4' not in facts:
+                log.debug("Insufficient facts for {} - possibly nor products".format(k))
+                continue
             ip = facts["ansible_default_ipv4"]
 
             if 'edd_container' not in facts or not isinstance(facts['edd_container'], dict):

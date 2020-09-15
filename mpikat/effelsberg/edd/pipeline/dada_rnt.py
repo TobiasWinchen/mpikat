@@ -148,4 +148,3 @@ def render_dada_header(overrides):
         "utc_start": datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S.%f')
     })
     return jinja2.Template(DADA_HEADER).render(**defaults)
-

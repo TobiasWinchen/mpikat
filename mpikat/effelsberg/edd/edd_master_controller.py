@@ -308,6 +308,15 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
 
     @coroutine
+    def measurement_prepare(self, config_json=""):
+        """"""
+        log.debug("Received measurement prepare ... ")
+        for cid, controller in self.__controller.iteritems():
+            log.debug("  - Measurement prepare: {}".format(cid))
+            yield controller.measurement_prepare(config_json)
+
+
+    @coroutine
     def measurement_start(self):
         """
         """
@@ -538,7 +547,6 @@ if __name__ == "__main__":
 
     parser.add_argument('--edd_ansible_inventory', dest='inventory', type=str,
             default="effelsberg", help='The inventory to use with the ansible setup')
-    args = parser.parse_args()
     args = parser.parse_args()
 
     server = EddMasterController(

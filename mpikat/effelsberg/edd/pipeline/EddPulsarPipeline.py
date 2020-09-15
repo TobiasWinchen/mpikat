@@ -499,7 +499,9 @@ class EddPulsarPipeline(EDDPipeline):
 
         self._source_name = self.__eddDataStore.getTelescopeDataItem("source-name")
         ra = self.__eddDataStore.getTelescopeDataItem("ra")
-        decl = self.__eddDataStore.getTelescopeDataItem("decl")
+        decl = self.__eddDataStore.getTelescopeDataItem("dec")
+        scannum = self.__eddDataStore.getTelescopeDataItem("scannum")
+        subscannum = self.__eddDataStore.getTelescopeDataItem("subscannum")
         log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
 
         central_freq = self._config['input_data_streams'][
@@ -556,8 +558,7 @@ class EddPulsarPipeline(EDDPipeline):
                                        "sample_rate"] / self._config['input_data_streams']['polarization_0']["predecimation_factor"])
         #header["tsamp"] = 1 / (2.0 * bandwidth)
         header["source_name"] = self._source_name
-        header["obs_id"] = "{0}_{1}".format(
-            sensors["scannum"], sensors["subscannum"])
+        header["obs_id"] = "{0}_{1}".format( scannum, subscannum)
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
 
