@@ -487,7 +487,9 @@ class EddPulsarPipeline(EDDPipeline):
 
         self._source_name = self.__eddDataStore.getTelescopeDataItem("source-name")
         ra = self.__eddDataStore.getTelescopeDataItem("ra")
-        decl = self.__eddDataStore.getTelescopeDataItem("decl")
+        decl = self.__eddDataStore.getTelescopeDataItem("dec")
+        scannum = self.__eddDataStore.getTelescopeDataItem("scannum")
+        subscannum = self.__eddDataStore.getTelescopeDataItem("subscannum")
         log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
 
         central_freq = self._config['input_data_streams'][
@@ -514,7 +516,7 @@ class EddPulsarPipeline(EDDPipeline):
         #writing mkrecv header
         self._central_freq.set_value(str(central_freq))
         self._source_name_sensor.set_value(self._source_name)
-        self._nchannels.set_value(self._config["nchan"])
+        self._nchannels.set_value(self._config["nchannels"])
         self._nbins.set_value(self._config["nbins"])
 
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
@@ -540,8 +542,7 @@ class EddPulsarPipeline(EDDPipeline):
                                        "sample_rate"] / self._config['input_data_streams']['polarization_0']["predecimation_factor"])
         header["tsamp"] = 1 / (2.0 * bandwidth)
         header["source_name"] = self._source_name
-        header["obs_id"] = "{0}_{1}".format(
-            sensors["scannum"], sensors["subscannum"])
+        header["obs_id"] = "{0}_{1}".format( scannum, subscannum)
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
 
@@ -660,7 +661,7 @@ class EddPulsarPipeline(EDDPipeline):
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self._config["nchan"]),
+                    nchan="-F {}:D".format(self._config["nchannels"]),
                     nbin="-b {}".format(self._config["nbins"]),
                     name=self._source_name,
                     predictor="/tmp/t2pred.dat",
@@ -673,7 +674,7 @@ class EddPulsarPipeline(EDDPipeline):
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self._config["nchan"]),
+                    nchan="-F {}:D".format(self._config["nchannels"]),
                     name=self._source_name,
                     cpus=",".join(self.__core_sets['dspsr']),
                     cuda_number=self.cuda_number,
