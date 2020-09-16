@@ -55,6 +55,9 @@ class EDDDataStore:
 
             facts = json.loads(self._ansible[k])
 
+            if 'ansible_default_ipv4' not in facts:
+                log.debug("Insufficient facts for {} - possibly nor products".format(k))
+                continue
             ip = facts["ansible_default_ipv4"]
 
             if 'edd_container' not in facts or not isinstance(facts['edd_container'], dict):
@@ -139,3 +142,22 @@ class EDDDataStore:
         else:
             log.warning("Unknown data format: - {}".format(key))
             return {}
+
+
+    def addTelescopeDataItem(self, key, pars):
+        pars['value'] = pars['default']
+        try:
+            self._telescopeMetaData.hmset(key, pars)
+        except Exception as E:
+            log.error("Error setting {}".format(key))
+
+    def setTelescopeDataItem(self, key, value):
+        self._telescopeMetaData.hset(key, "value", value)
+
+    def getTelescopeDataItem(self, key):
+        return self._telescopeMetaData.hget(key, "value")
+
+if __name__ == "__main__":
+    store = EDDDataStore("localhost")
+    store.setTelescopeDataItem("foo", "bar")
+    print (store.getTelescopeDataItem("foo"))

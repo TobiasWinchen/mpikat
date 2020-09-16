@@ -3,6 +3,7 @@ import logging
 from mpikat.core.scpi import ScpiAsyncDeviceServer, scpi_request, raise_or_ok, launch_server
 import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
 from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
+from mpikat.effelsberg.edd import EDDDataStore
 import coloredlogs
 from tornado.gen import Return, coroutine, sleep
 import tornado
@@ -13,7 +14,7 @@ log = logging.getLogger('mpikat.edd_scpi_interface')
 
 
 class EddScpiInterface(ScpiAsyncDeviceServer):
-    def __init__(self, interface, port, master_ip, master_port, ioloop=None):
+    def __init__(self, interface, port, master_ip, master_port, redis_ip, redis_port, scannum_check_period=1000,  ioloop=None):
         """
         @brief      A SCPI interface for a EddMasterController instance
 
@@ -21,16 +22,49 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @param      master_controller_port  Port of a master controll to send commands to
         @param      interface    The interface to listen on for SCPI commands
         @param      port        The port to listen on for SCPI commands
-        @param      ioloop       The ioloop to use for async functionsnsible apply roles round robin
+        @param      ioloop       The ioloop to use for async functions
 
         @note If no IOLoop instance is specified the current instance is used.
         """
 
         log.info("Listening at {}:{}".format(interface, port))
         log.info("Master at {}:{}".format(master_ip, master_port))
+        log.info("Datastore at {}:{}".format(redis_ip, redis_port))
         super(EddScpiInterface, self).__init__(interface, port, ioloop)
-        self.address = (master_ip, master_port)
         self.__controller = EddServerProductController("MASTER", master_ip, master_port)
+        self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
+
+        #Periodicaly check scan number and send measurement prepare on change
+        self._scannum_callback = tornado.ioloop.PeriodicCallback(self.__check_scannum, scannum_check_period)
+        self._scannum_callback.start()
+        self._last_scannum = None
+
+
+    @coroutine
+    def __check_scannum(self):
+        """
+        @brief check scan number
+        """
+        current_scan_number = self.__eddDataStore.getTelescopeDataItem("scannum")
+        if not self._last_scannum:
+            log.debug("First retrival of scannumbner, got {}".format(current_scan_number))
+            self._last_scannum = current_scan_number
+        elif self._last_scannum == current_scan_number:
+            log.debug("Checking scan number {} == {}, doing nothing.".format(current_scan_number, self._last_scannum))
+            pass
+        else:
+            log.debug("Scan number change detected from {} -> {}".format(self._last_scannum, current_scan_number))
+            self._last_scannum = current_scan_number
+
+            sourcename = self.__eddDataStore.getTelescopeDataItem("source-name")
+            if sourcename.endswith("_R"):
+
+                log.debug("Source ends with _R, enabling noise diode")
+                cfg = {"set_noise_diode_firing_pattern": {"percentage":0.5, "period":1}}
+            else:
+                log.debug("Source ends not with _R, enabling noise diode")
+                cfg = {"set_noise_diode_firing_pattern": {"percentage":0.0, "period":1}}
+            self.__controller.measurement_prepare(cfg)
 
 
     @scpi_request()
@@ -140,15 +174,21 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 if __name__ == "__main__":
 
     parser = EDDPipeline.getArgumentParser()
-    parser.add_argument('--master-controller-ip', dest='master_ip', type=str, default="edd01",
-                      help='The ip for the master controller')
-    parser.add_argument('--master-controller-port', dest='master_port', type=int, default=7147,
-                      help='The port number for the master controller')
+    parser.add_argument('--master-controller-ip', dest='master_ip', type=str,
+            default="edd01", help='The ip for the master controller')
+    parser.add_argument('--master-controller-port', dest='master_port',
+            type=int, default=7147, help='The port number for the master controller')
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str,
+            default="localhost", help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int,
+            default=6379, help='The port number for the redis server')
+    parser.add_argument('--scannum-check-period', dest='scannum_check_period',
+            type=int, default=1000, help='Period [ms] between checks of changes of the scan number.')
     args = parser.parse_args()
 
     EDDPipeline.setup_logger(log, args.log_level.upper())
 
-    server = EddScpiInterface(args.host, args.port, args.master_ip, args.master_port)
+    server = EddScpiInterface(args.host, args.port, args.master_ip, args.master_port, args.redis_ip, args.redis_port, args.scannum_check_period)
     #Scpi Server is not an EDDPipieline, but launcher work nevertheless
     EDDPipeline.launchPipelineServer(server, args)
 

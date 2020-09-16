@@ -5,13 +5,18 @@ import select
 import json
 import coloredlogs
 import signal
-from lxml import etree
+from xml import etree
 from threading import Thread, Event, Lock
 from tornado.gen import coroutine
 from tornado.ioloop import PeriodicCallback, IOLoop
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str
 from mpikat.effelsberg.status_config import EFF_JSON_CONFIG
+
+from mpikat.effelsberg.edd.pipeline import EDDPipeline
+from mpikat.effelsberg.edd import EDDDataStore
+
+
 
 TYPE_CONVERTER = {
     "float": float,
@@ -126,7 +131,11 @@ class JsonStatusServer(AsyncDeviceServer):
                  mcast_group=JSON_STATUS_MCAST_GROUP,
                  mcast_port=JSON_STATUS_PORT,
                  parser=EFF_JSON_CONFIG,
+                 redis_ip ="localhost",
+                 redis_port=6379,
                  dummy=False):
+
+        self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
         self._mcast_group = mcast_group
         self._mcast_port = mcast_port
         self._parser = parser
@@ -151,8 +160,11 @@ class JsonStatusServer(AsyncDeviceServer):
             if name in self._controlled:
                 continue
             if "updater" in params:
-                self._sensors[name].set_value(params["updater"](data))
+                value = params["updater"](data)
+                self._sensors[name].set_value(value)
+                self.__eddDataStore.setTelescopeDataItem(name, value)
 
+    @coroutine
     def start(self):
         """start the server"""
         super(JsonStatusServer, self).start()
@@ -162,6 +174,7 @@ class JsonStatusServer(AsyncDeviceServer):
                 self._update_sensors, 1000, io_loop=self.ioloop)
             self._monitor.start()
 
+    @coroutine
     def stop(self):
         """stop the server"""
         if not self._dummy:
@@ -272,6 +285,7 @@ class JsonStatusServer(AsyncDeviceServer):
             param = self._parser[name]
             value = TYPE_CONVERTER[param["type"]](value)
             self._sensors[name].set_value(value)
+            self.__eddDataStore.setTelescopeDataItem(name, value)
         except Exception as error:
             return ("fail", str(error))
         else:
@@ -283,6 +297,12 @@ class JsonStatusServer(AsyncDeviceServer):
         """Set up basic monitoring sensors.
         """
         for name, params in self._parser.items():
+            v = params.copy()
+            v.pop('updater')
+            if 'range' in v: 
+                v.pop('range')
+
+            self.__eddDataStore.addTelescopeDataItem(name, v)
             if params["type"] == "float":
                 sensor = Sensor.float(
                     name,
@@ -316,44 +336,15 @@ class JsonStatusServer(AsyncDeviceServer):
             self.add_sensor(sensor)
 
 
-@coroutine
-def on_shutdown(ioloop, server):
-    log.info("Shutting down server")
-    yield server.stop()
-    ioloop.stop()
-
-
-def main():
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
-                      help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=long,
-                      help='Port number to bind to')
-    parser.add_option('', '--log-level', dest='log_level', type=str,
-                      help='Port number of status server instance', default="INFO")
-    (opts, args) = parser.parse_args()
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
-    logging.getLogger('katcp').setLevel(logging.DEBUG)
-    coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level=opts.log_level.upper(),
-        logger=logger)
-    ioloop = IOLoop.current()
-    log.info("Starting JsonStatusServer instance")
-    server = JsonStatusServer(opts.host, opts.port)
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, server))
-
-    def start_and_display():
-        server.start()
-        log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
-
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
-
 if __name__ == "__main__":
-    from optparse import OptionParser
-    main()
+    parser = EDDPipeline.getArgumentParser()
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
+                      help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
+                      help='The port number for the redis server')
+
+    args = parser.parse_args()
+
+    server = JsonStatusServer(args.host, args.port, redis_port=args.redis_port, redis_ip=args.redis_ip)
+    EDDPipeline.launchPipelineServer(server, args)
+

@@ -146,6 +146,9 @@ class EDDPipeline(AsyncDeviceServer):
         self._state = "idle"
         self.previous_state = "unprovisioned"
         self._sensors = []
+        # inject data store dat into all default configs.
+        if "data_store" not in default_config:
+            default_config["data_store"] = dict(ip="localhost", port=6379)
         self.__config = default_config.copy()
         self._default_config = default_config
         self._subprocesses = []
@@ -294,6 +297,9 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        D = req.client_connection._get_address()
+        print(type(D))
+        print(D)
 
         @coroutine
         def configure_wrapper():
@@ -726,6 +732,7 @@ def launchPipelineServer(Pipeline, args=None):
 
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting Pipeline instance")
+    log.info("Accepting connections from: {}:{}".format(args.host, args.port))
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, server))
@@ -734,9 +741,7 @@ def launchPipelineServer(Pipeline, args=None):
         log.info("Starting Pipeline server")
         server.start()
         log.debug("Started Pipeline server")
-        log.info(
-            "Listening at {-1}, Ctrl-C to terminate server".format(
-                server.bind_address))
+        log.info("Ctrl-C to terminate server")
 
     ioloop.add_callback(start_and_display)
     ioloop.start()
