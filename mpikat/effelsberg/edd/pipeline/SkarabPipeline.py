@@ -75,7 +75,8 @@ DEFAULT_CONFIG = {
 
         "log_level": "debug",
         "force_program": False,                 # Force reprogramming of with new firmware version
-        "firmware": os.path.join(os.path.dirname(os.path.realpath(__file__)), "skarab_firmware", "s_ubb_64ch_codd_2020-07-31_1348.fpg"),
+        "firmware_directory": os.path.join(os.path.dirname(os.path.realpath(__file__)), "skarab_firmware"),
+        "firmware": "s_ubb_64ch_codd_2020-07-31_1348.fpg",
         "channels_per_group": 8,                # Channels per multicast group in the fpga output
         "board_id": 23,                         # Id to add to the spead headers of the FPGA output
         "initial_quantization_factor": 0x012C0000 ,       # initial value for the quantization factor. Can be changed per measurement
@@ -84,7 +85,7 @@ DEFAULT_CONFIG = {
     }
 
 for i in range(8):
-    ip = "239.0.0.{}".format(111+i)
+    ip = "239.0.0.{}".format(120+i)
     DEFAULT_CONFIG["output_data_streams"]['Output_{}'.format(i)] = {"format": "Skarab:1", "ip": ip, "port": "7152"}
 
 
@@ -149,7 +150,7 @@ class SkarabPipeline(EDDPipeline):
         log.info("Final configuration:\n" + cfs)
 
         log.debug("Setting firmware string")
-        self._client.setFirmware(self._config['firmware'])
+        self._client.setFirmware(os.path.join(self._config["firmware_directory"], self._config['firmware']))
         log.debug("Connecting to client")
         self._client.connect()
         if self._config['force_program']:
