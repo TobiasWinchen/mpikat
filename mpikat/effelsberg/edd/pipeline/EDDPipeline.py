@@ -45,8 +45,7 @@ import types
 import functools
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
-log.setLevel('DEBUG')
-
+log.setLevel("INFO")
 
 def updateConfig(oldo, new):
     """
@@ -149,6 +148,7 @@ class EDDPipeline(AsyncDeviceServer):
         # inject data store dat into all default configs.
         if "data_store" not in default_config:
             default_config["data_store"] = dict(ip="localhost", port=6379)
+
         self.__config = default_config.copy()
         self._default_config = default_config
         self._subprocesses = []
@@ -185,7 +185,6 @@ class EDDPipeline(AsyncDeviceServer):
         Actions to take after config has been updated
         """
         self._edd_config_sensor.set_value(json.dumps(self._config, indent=4))
-
 
     def setup_sensors(self):
         """
@@ -224,6 +223,40 @@ class EDDPipeline(AsyncDeviceServer):
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._status_change_time)
 
+        self._log_level = Sensor.string(
+            "log-level",
+            description="Log level",
+            default=logging.getLevelName(log.level),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._log_level)
+
+
+    @request(Str())
+    @return_reply()
+    def request_set_log_level(self, req, level):
+        """
+        @brief     Sets the log level
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+        D = req.client_connection._get_address()
+
+        @coroutine
+        def wrapper():
+            try:
+                log.info("Setting log level to: {}".format(level.upper()))
+                log.setLevel(level.upper())
+                self._log_level.set_value(level.upper())
+                log.debug("Successfully set log-level")
+            except FailReply as fr:
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
 
     @property
     def sensors(self):
@@ -713,10 +746,11 @@ def setup_logger(args):
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     logger.setLevel(args.log_level.upper())
+    log.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
-        level=args.log_level.upper(),
+        level=1,            # We manage the log lvel via the logger, not the handler
         logger=logger)
 
 
