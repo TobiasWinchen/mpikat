@@ -38,8 +38,8 @@ class SkarabInterface(object):
     Interface to skarab FPGAs via casperfpga but with asyncio.
     """
     def __init__(self, ip, port, firmwarefile=None):
-        """ing Skarab instance")
- 
+        """Skarab instance")
+
         ip and port of the FPGA board to connect to.
         """
         log.debug("Starting Skarab instance")
@@ -160,9 +160,6 @@ class SkarabChannelizerClient(SkarabInterface):
         self._client.gbes.gbe1.set_port(port)
 
 
-
-
-
     @coroutine
     def generate_snapshots(self, size=4096):
         """
@@ -278,7 +275,7 @@ class SkarabChannelizerClient(SkarabInterface):
     @coroutine
     def configure_fft_shift(self, fft_shift):
         """
-        Writes FFT Shift 
+        Writes FFT Shift
         """
         self._client.write_int('fft_shift',fft_shift)
         yield sleep(0.5)
@@ -297,53 +294,6 @@ class SkarabChannelizerClient(SkarabInterface):
         self._client.registers.control.write(sys_rst='pulse') #256: sys_rst, 511 mrst pulse
         yield sleep(1)
 
-#    @coroutine
-#    def program(self):
-#        yield SkarabInterface.program(self)
-#        yield self.reset_registers()
-
-#
-#@coroutine
-#def main():
-#    port = 7147
-#    ip ="10.10.1.62"
-#    skarab = SkarabChannelizer(ip, port)
-#    yield skarab.initialize()
-#    #yield skarab.subscribe_multicast_groups("225.0.0.152", "225.0.0.156", 7148)
-#    yield skarab.configure_output("225.0.1.111", 1230)
-#    D = yield skarab.read_output_config()
-#    yield skarab.capture_start()
-#    print(D)
-#    #S = yield skarab.generate_snapshots() 
-#    #print(S)
-#
-#
-#    #yield skarab.program(FIRMWARE)
-#
-#########################################################################
-## Casper FPGA IP Config
-##
-##def ips(v):
-##    ip = casperfpga.gbe.IpAddress("225.0.5.152")
-##    return ip.ip2str(v)
-##
-##ip = casperfpga.gbe.IpAddress("225.0.0.152")
-##mask = casperfpga.gbe.IpAddress("0.0.0.255")
-##
-##ip_high = ip.ip_int >> 16
-##ip_low = ip.ip_int & (2 ** 16 - 1)
-##mask_high = mask.ip_int >> 16
-##mask_low = mask.ip_int & (2 ** 16 - 1)
-##
-##print("High {}".format(ips(ip_high)))
-##print("Low {}".format(ips(ip_low)))
-##
-##print("mask High {}".format(ips(mask_high)))
-##print("mask Low {}".format(ips(mask_low)))
-#
-#io_loop = ioloop.IOLoop.current()
-#log.info("Starting ioloop")
-#io_loop.run_sync(main)
 
 if __name__ == "__main__":
     import coloredlogs
@@ -368,7 +318,7 @@ if __name__ == "__main__":
     parser.add_argument('--set-quantization', dest='quantization',
         help='Sets quanization factor')
 
-    parser.add_argument('--set-fftshift', dest='fftshift', type=int, 
+    parser.add_argument('--set-fftshift', dest='fftshift', type=int,
         help='Sets fft shift')
 
     parser.add_argument('--program', action="store_true", default=False, help="Programs he FPGA with the given firmware")
@@ -389,7 +339,7 @@ if __name__ == "__main__":
         actions.append((client.program, {}))
 
     if args.outputs:
-        ip, N, port = split_ipstring(args.outputs) 
+        ip, N, port = split_ipstring(args.outputs)
         actions.append((client.configure_output, dict(dest_ip=ip, dest_port=port, number_of_groups=N)))
     if args.inputs:
         inp0, inp1 = args.inputs.split(',')
