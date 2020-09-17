@@ -65,6 +65,15 @@ def is_validat_multicast_range(ip, N, port):
     return True
 
 
+def ipstring_to_list(ipstring):
+    """
+    Generate list of ips from string of form a.b.c.d+3
+    """
+    ip, N, port = split_ipstring(ipstring)
+    ips = [(ipaddress.IPv4Address(ip) + i).compressed for i in range(N)]
+    return ips
+
+
 def ipstring_from_list(ipstrings):
     """
     Creates a string of format a.b.c.d+x from a list of ips.

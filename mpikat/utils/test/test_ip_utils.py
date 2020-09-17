@@ -1,5 +1,5 @@
 from __future__ import print_function, division, unicode_literals
-from mpikat.utils.ip_utils import split_ipstring, is_validat_multicast_range, ipstring_from_list 
+from mpikat.utils.ip_utils import split_ipstring, is_validat_multicast_range, ipstring_from_list, ipstring_to_list
 import unittest
 import logging
 
@@ -61,6 +61,23 @@ class Test_ipstring_from_list(unittest.TestCase):
     def test_noncont_range(self):
         with self.assertRaises(Exception) as cm:
             s = ipstring_from_list(["225.0.0.1", "225.0.0.3"])
+
+
+class Test_ipstring_to_list(unittest.TestCase):
+    def test_range(self):
+        s = ipstring_to_list("225.0.0.1+5")
+        self.assertEqual(len(s), 6)
+        self.assertEqual(s[0], "225.0.0.1")
+        self.assertEqual(s[1], "225.0.0.2")
+        self.assertEqual(s[2], "225.0.0.3")
+        self.assertEqual(s[3], "225.0.0.4")
+        self.assertEqual(s[4], "225.0.0.5")
+        self.assertEqual(s[5], "225.0.0.6")
+
+    def test_zero_range(self):
+        s = ipstring_to_list("225.0.0.1")
+        self.assertEqual(len(s), 1)
+        self.assertEqual(s[0], "225.0.0.1")
 
 
 if __name__ == '__main__':
