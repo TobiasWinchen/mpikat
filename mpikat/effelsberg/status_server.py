@@ -344,6 +344,7 @@ if __name__ == "__main__":
                       help='The port number for the redis server')
 
     args = parser.parse_args()
+    EDDPipeline.setup_logger(args)
 
     server = JsonStatusServer(args.host, args.port, redis_port=args.redis_port, redis_ip=args.redis_ip)
     EDDPipeline.launchPipelineServer(server, args)

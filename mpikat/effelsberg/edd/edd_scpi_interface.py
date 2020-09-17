@@ -186,7 +186,7 @@ if __name__ == "__main__":
             type=int, default=1000, help='Period [ms] between checks of changes of the scan number.')
     args = parser.parse_args()
 
-    EDDPipeline.setup_logger(log, args.log_level.upper())
+    EDDPipeline.setup_logger(args)
 
     server = EddScpiInterface(args.host, args.port, args.master_ip, args.master_port, args.redis_ip, args.redis_port, args.scannum_check_period)
     #Scpi Server is not an EDDPipieline, but launcher work nevertheless

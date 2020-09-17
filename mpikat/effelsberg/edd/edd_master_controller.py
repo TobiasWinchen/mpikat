@@ -24,6 +24,7 @@ import coloredlogs
 import json
 import os
 
+import git
 import tornado
 import signal
 
@@ -125,8 +126,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             log.error("Error processing setting in pipeline")
             log.exception(E)
             raise FailReply("Error processing setting in pipeline {}".format(E))
-
-
 
 
     @coroutine
@@ -541,6 +540,50 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         self.__provisioned = None
 
 
+    @request(Str())
+    @return_reply()
+    def request_provision_update(self, req, repository=""):
+        """
+        @brief   Clones or pulls updates for the git repository 
+
+        """
+        @coroutine
+        def wrapper():
+            try:
+                yield self.provision_update(name)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def provision_update(self, repository=""):
+        """
+        @brief   Clones or pulls updates for the git repository 
+        """
+
+        if not os.path.isdir(self.__edd_ansible_git_repository_folder):
+            raise RuntimeError("Directory {} does not exist!".format(self.__edd_ansible_git_repository_folder))
+            #log.debug("Directory {} does not exist, cloning from {}".format(self.__edd_ansible_git_repository_folder, repository))
+            #repo = git.Repo.clone_from(repo_source, target_dir)
+        else:
+            repo = git.Repo(self.__edd_ansible_git_repository_folder)
+
+        if repo.is_dirty():
+            raise RuntimeError("Trying to update dirty repository. Please fix manually!")
+
+        comm = repo.remote().pull()[0].commit
+        log.info("Updated to latest commit: {}, {}\n    {}\n\n    {}".format(comm.hexsha, comm.authored_datetime.ctime(), comm.author, comm.message))
+
+
+
 
 if __name__ == "__main__":
     parser = EDDPipeline.getArgumentParser()
@@ -554,6 +597,7 @@ if __name__ == "__main__":
     parser.add_argument('--edd_ansible_inventory', dest='inventory', type=str,
             default="effelsberg", help='The inventory to use with the ansible setup')
     args = parser.parse_args()
+    EDDPipeline.setup_logger(args)
 
     server = EddMasterController(
         args.host, args.port,

@@ -30,7 +30,7 @@ from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Int, Str
 
 import tornado
-from tornado.gen import coroutine
+from tornado.gen import coroutine, Return
 
 import os
 import datetime
@@ -298,8 +298,6 @@ class EDDPipeline(AsyncDeviceServer):
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         D = req.client_connection._get_address()
-        print(type(D))
-        print(D)
 
         @coroutine
         def configure_wrapper():
@@ -363,16 +361,15 @@ class EDDPipeline(AsyncDeviceServer):
 
 
     @coroutine
-    def set(self, config_json):
+    def _cfgjson2dict(self, config_json):
         """
-        @brief      Add the config_json to the current config
-
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        @brief  Returns the config as dict.
         """
-
-        log.debug("Updating configuration: '{}'".format(config_json))
         if isinstance(config_json, str):
-            log.debug("Received config as string")
+            log.debug("Received config as string:\n  {}".format(config_json))
+            if (not config_json.strip()) or config_json.strip() == '""':
+                log.debug("String empty, returning empty dict.")
+                raise Return({})
             try:
                 cfg = json.loads(config_json)
             except:
@@ -383,9 +380,22 @@ class EDDPipeline(AsyncDeviceServer):
             cfg = config_json
         else:
             raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
+        log.debug("Got cfg: {}, {}".format(cfg, type(cfg)))
+        raise Return(cfg)
+
+
+    @coroutine
+    def set(self, config_json):
+        """
+        @brief      Add the config_json to the current config
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+
+        log.debug("Updating configuration: '{}'".format(config_json))
+        cfg = yield self._cfgjson2dict(config_json)
         try:
             self._config = updateConfig(self.__config, cfg)
-            self._configUpdated()
             log.debug("Updated config: '{}'".format(self._config))
         except KeyError as error:
             raise FailReply("Unknown configuration option: {}".format(str(error)))
@@ -696,15 +706,17 @@ def getArgumentParser():
     return parser
 
 
-def setup_logger(log, level):
+def setup_logger(args):
+    """
+    Setup log level from value provided py argument parser
+    """
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
-    logger.setLevel(level)
-    log.setLevel(level)
+    logger.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
-        level=level,
+        level=args.log_level.upper(),
         logger=logger)
 
 
@@ -720,7 +732,7 @@ def launchPipelineServer(Pipeline, args=None):
         parser = getArgumentParser()
         args = parser.parse_args()
 
-    setup_logger(log, args.log_level.upper())
+    setup_logger(args)
 
     if (type(Pipeline) == types.ClassType) or isinstance(Pipeline, type):
         log.info("Created Pipeline instance")
