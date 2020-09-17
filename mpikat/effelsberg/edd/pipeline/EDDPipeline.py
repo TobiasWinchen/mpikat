@@ -239,8 +239,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-        D = req.client_connection._get_address()
-
         @coroutine
         def wrapper():
             try:
@@ -257,6 +255,24 @@ class EDDPipeline(AsyncDeviceServer):
                 req.reply("ok")
         self.ioloop.add_callback(wrapper)
         raise AsyncReply
+
+
+    @request()
+    @return_reply()
+    def request_whoami(self, req):
+        """
+        @brief      Returns the name of the controlled pipeline
+
+        @return     katcp reply object
+        """
+
+        @coroutine
+        def wrapper():
+            req.reply(self.__class__.__name__)
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
+
+
 
     @property
     def sensors(self):
@@ -330,8 +346,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-        D = req.client_connection._get_address()
-
         @coroutine
         def configure_wrapper():
             try:
