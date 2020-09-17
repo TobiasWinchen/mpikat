@@ -35,7 +35,6 @@ import json
 import os
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.SkarabPipeline")
-log.setLevel('DEBUG')
 
 DEFAULT_CONFIG = {
         "id": "SkarabPipeline",                          # default name for master controler. Needs to get a unique ID -- TODO, from ansible

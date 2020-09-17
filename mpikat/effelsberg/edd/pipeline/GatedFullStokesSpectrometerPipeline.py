@@ -41,7 +41,6 @@ import json
 import tempfile
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedFullStokesSpectrometerPipeline")
-log.setLevel('DEBUG')
 
 # DADA BUFFERS TO BE USED
 DADABUFFERS = ["dada"]

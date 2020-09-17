@@ -51,7 +51,6 @@ import tornado
 from tornado.gen import coroutine, sleep
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
-log.setLevel('DEBUG')
 
 DEFAULT_CONFIG = {
     "id": "PulsarPipeline",

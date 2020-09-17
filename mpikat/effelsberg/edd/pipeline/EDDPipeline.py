@@ -45,7 +45,6 @@ import types
 import functools
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
-log.setLevel("INFO")
 
 def updateConfig(oldo, new):
     """
@@ -243,7 +242,8 @@ class EDDPipeline(AsyncDeviceServer):
         def wrapper():
             try:
                 log.info("Setting log level to: {}".format(level.upper()))
-                log.setLevel(level.upper())
+                logger = logging.getLogger('mpikat')
+                logger.setLevel(level.upper())
                 self._log_level.set_value(level.upper())
                 log.debug("Successfully set log-level")
             except FailReply as fr:
@@ -759,13 +759,12 @@ def setup_logger(args):
     """
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
-    logger.setLevel(args.log_level.upper())
-    log.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
         level=1,            # We manage the log lvel via the logger, not the handler
         logger=logger)
+    logger.setLevel(args.log_level.upper())
 
 
 

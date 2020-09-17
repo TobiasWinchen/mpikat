@@ -2,8 +2,7 @@ import redis
 import json
 import logging
 
-log = logging.getLogger("mpikat.edd_data_store")
-log.setLevel("INFO")
+log = logging.getLogger(__name__)
 
 
 class EDDDataStore:
