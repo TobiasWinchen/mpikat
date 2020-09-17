@@ -21,13 +21,13 @@ SOFTWARE.
 """
 from __future__ import print_function, division, unicode_literals
 
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change, getArgumentParser
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change, getArgumentParser, setup_logger
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 from mpikat.effelsberg.edd.edd_skarab_client import SkarabChannelizerClient
 import mpikat.utils.ip_utils as ip_utils
 
 from tornado.gen import coroutine, sleep
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, FailReply
 
 import logging
@@ -68,8 +68,8 @@ DEFAULT_CONFIG = {
                 "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
             }
         },
-        "output_data_streams":                      # Filled programatically, see below
-        {
+        "output_data_streams":                              # Filled programatically, see below
+        {                                                   # The output can be split into an arbitrary sequence of streams. The board streams to the lowest specified stream + 8 groups
 
         },
 
@@ -84,9 +84,10 @@ DEFAULT_CONFIG = {
 
     }
 
-for i in range(8):
-    ip = "239.0.0.{}".format(120+i)
-    DEFAULT_CONFIG["output_data_streams"]['Output_{}'.format(i)] = {"format": "Skarab:1", "ip": ip, "port": "7152"}
+#for i in range(8):
+#    ip = "239.0.0.{}".format(120+i)
+#    DEFAULT_CONFIG["output_data_streams"]['Output_{}'.format(i)] = {"format": "Skarab:1", "ip": ip, "port": "7152"}
+DEFAULT_CONFIG["output_data_streams"] = { "lower_subband": { "format": "Skarab:1", "ip": "239.0.0.120+3", "port": "7152" }, "upper_subband": { "format": "Skarab:1", "ip": "239.0.0.124+3", "port": "7152" } }
 
 
 class SkarabPipeline(EDDPipeline):
@@ -102,17 +103,23 @@ class SkarabPipeline(EDDPipeline):
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
         log.info('Connecting to skarab @ {}:{}'.format(device_ip, device_port))
         self._client = SkarabChannelizerClient(device_ip, device_port)
+        self.__periodic_callback = PeriodicCallback(self._check_fpga_sensors, 1000)
+        self.__periodic_callback.start()
 
-        IOLoop.current().spawn_callback(self.periodic_check_fpga_sensors)
-
+#    @coroutine
+#    def start(self):
+#        log.debug("Starting")
+#        super(SkarabPipeline, self).start()
+#        log.debug("Starting")
+#        log.debug("Starting")
+#        log.debug("Starting")
 
     @coroutine
-    def periodic_check_fpga_sensors(self):
-        while True:
-            if self._client.is_connected():
-                clk = yield self._client.get_fpga_clock()
-                self._fpga_clock.set_value(clk)
-            yield sleep(1)
+    def _check_fpga_sensors(self):
+        log.debug(" Check FPGA Sensors")
+        if self._client.is_connected():
+            clk = yield self._client.get_fpga_clock()
+            self._fpga_clock.set_value(clk)
 
 
     def setup_sensors(self):
@@ -125,6 +132,21 @@ class SkarabPipeline(EDDPipeline):
             description="FPGA Clock estimate",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._fpga_clock)
+
+
+    @coroutine
+    def set(self, config_json):
+        cfg = yield self._cfgjson2dict(config_json)
+        if 'output_data_streams' in cfg:
+            log.debug("Stripping outputs from cfg before check")
+            # Do not check output data streams, as the only relevant thing is here
+            # that they are consecutive
+            outputs = cfg.pop['output_data_streams']
+            EDDPipeline.set(self, cfg)
+            self._config['output_data_streams'] = outputs
+        else:
+            EDDPipeline.set(self, cfg)
+
 
 
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")
@@ -143,7 +165,6 @@ class SkarabPipeline(EDDPipeline):
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
-
         yield self.set(config_json)
 
         cfs = json.dumps(self._config, indent=4)
@@ -161,7 +182,12 @@ class SkarabPipeline(EDDPipeline):
 
         yield self._client.configure_inputs(self._config["input_data_streams"]["polarization_0"]["ip"], self._config["input_data_streams"]["polarization_1"]["ip"], int(self._config["input_data_streams"]["polarization_0"]["port"]))
 
-        output_string = ip_utils.ipstring_from_list([l["ip"] for l in self._config["output_data_streams"].itervalues()])
+        # Convert arbitrary output parts to input list
+        iplist = []
+        for l in self._config["output_data_streams"].itervalues():
+            iplist.extend(ip_utils.ipstring_to_list(l["ip"]))
+
+        output_string = ip_utils.ipstring_from_list(iplist)
         ip, N, port = ip_utils.split_ipstring(output_string)
 
         port = set([l["port"] for l in self._config["output_data_streams"].itervalues()])
@@ -236,6 +262,7 @@ if __name__ == "__main__":
     parser.add_argument('--skarab-port', dest='skarab_port', type=int, default=7147, help='The port number to control the skarab board')
 
     args = parser.parse_args()
+    setup_logger(args)
 
     pipeline = SkarabPipeline(
         args.host, args.port,
