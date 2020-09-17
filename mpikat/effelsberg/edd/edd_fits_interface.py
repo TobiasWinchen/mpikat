@@ -9,7 +9,7 @@ import ctypes
 import json
 from datetime import datetime
 from threading import Thread, Event
-import queue
+import Queue as queue       # In python 3 this will be queue
 
 import spead2
 import spead2.recv
