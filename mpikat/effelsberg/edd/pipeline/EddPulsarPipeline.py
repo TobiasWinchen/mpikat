@@ -23,7 +23,7 @@ from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 import mpikat.utils.numa as numa
 
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 from mpikat.effelsberg.edd.pipeline.dada_rnt import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.pipeline.EddPulsarPipeline_blank_image import BLANK_IMAGE
@@ -450,19 +450,11 @@ class EddPulsarPipeline(EDDPipeline):
         pass
 
 
+    @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
-        if self.state != "idle":
-            log.warning(
-                "Configure received while in state: {} - deconfigureing first ...".format(self.state))
-            try:
-                log.debug("Deconfiguring pipeline before configuring")
-                self.deconfigure()
-            except Exception as error:
-                raise EddPulsarPipelineError(str(error))
-        self.state = "configuring"
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
@@ -480,24 +472,16 @@ class EddPulsarPipeline(EDDPipeline):
         # config to all pipelines
         self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
 
-        self.state = "ready"
-        log.info("Pipeline configured")
+
+    @state_change(target="ready", allowed=["configured"], intermediate="capture_starting")
+    def capture_start(self):
+        log.debug('Received capture start, doing nothing.')
 
 
+    @state_change(target="set", allowed=["ready"], intermediate="measurement_preparing")
     @coroutine
     def measurement_prepare(self, config_json):
-        log.info("measurement prepare")
-        if self.state != "ready":
-            log.debug("pipeline is not in ready state")
-            if self.state == "running":
-                log.debug(
-                    "pipeline is still configuring, issuing stop now and will start shortly")
-                yield self.measurement_stop()
-            if self.state == "configuring":
-                log.debug("pipeline is starting, do not send multiple start")
-                return
         self._subprocessMonitor = SubprocessMonitor()
-        self.state = "measurement_starting"
 
         self._source_name = self.__eddDataStore.getTelescopeDataItem("source-name")
         ra = self.__eddDataStore.getTelescopeDataItem("ra")
@@ -518,8 +502,6 @@ class EddPulsarPipeline(EDDPipeline):
                     error = "source {} is not pulsar or calibrator".format(self._source_name)
                     raise EddPulsarPipelineError(error)
 
-        log.info("starting pipeline")
-        self._state = "measurement_starting"
         self._timer = Time.now()
 
         #Setting blank image
@@ -666,21 +648,11 @@ class EddPulsarPipeline(EDDPipeline):
                     break
                 else:
                     attempts += 1
-        self._state = "ready"
 
 
+    @state_change(target="measuring", allowed=["set"], intermediate="measurement_starting")
     @coroutine
     def measurement_start(self):
-        log.info("measurement start")
-        if self._state != "ready":
-            log.debug("pipeline is not int ready state")
-            if self._state == "running":
-                log.debug(
-                    "pipeline is still running, issuing stop now and will start shortly")
-                yield self.stop_pipeline()
-            if self._state == "measurement_starting":
-                log.debug("pipeline is starting, do not send multiple start")
-                return
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
@@ -779,20 +751,14 @@ class EddPulsarPipeline(EDDPipeline):
         self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
         log.debug("Took {} s to start".format(self._timer * 86400))
-        self._state = "running"
-        log.info("Starting capturing")
 
 
+    @state_change(target="ready", allowed=["measuring"], intermediate="measurement_stopping")
     @coroutine
     def measurement_stop(self):
         """@brief stop mkrecv merging application and dspsr instances."""
-        if self._state != "running":
-            log.warning("pipeline is not captureing, can't stop now, current state = {}".format(
-                self._state))
-        self._state = "stopping"
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
-        log.debug("Stopping")
         if self._config["mode"] == "Timing":
             self._png_monitor_callback.stop()
         process = [self._mkrecv_ingest_proc,
@@ -810,22 +776,19 @@ class EddPulsarPipeline(EDDPipeline):
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         del self._subprocessMonitor
-        self._state = "ready"
-        log.info("Pipeline Stopped")
 
 
+    @state_change(target="idle", intermediate="deconfiguring", error='panic')
     @coroutine
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-        log.info("Deconfiguring pipeline")
+        #log.info("Deconfiguring pipeline")
         log.debug("Destroying dada buffers")
 
         for k in self._dada_buffers:
             cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
             yield command_watcher(cmd)
-        log.info("Deconfigured pipeline")
-        self._state = "idle"
 
 
     @request(Str())

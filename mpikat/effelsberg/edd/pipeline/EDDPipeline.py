@@ -293,6 +293,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @state.setter
     def state(self, value):
+        log.info("Changing state: {} -> {}".format(self.previous_state, value))
         self.previous_state = self._state
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
