@@ -483,7 +483,7 @@ class EddPulsarPipeline(EDDPipeline):
 
     @coroutine
     def measurement_prepare(self, config_json):
-        log.info("checking status")
+        log.info("measurement prepare")
         if self.state != "ready":
             log.debug("pipeline is not in ready state")
             if self.state == "running":
@@ -653,7 +653,7 @@ class EddPulsarPipeline(EDDPipeline):
 
     @coroutine
     def measurement_start(self):
-        log.info("checking status")
+        log.info("measurement start")
         if self._state != "ready":
             log.debug("pipeline is not int ready state")
             if self._state == "running":
