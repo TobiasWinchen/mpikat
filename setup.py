@@ -8,6 +8,7 @@ setup(name='mpikat',
       author_email='ebarr@mpifr-bonn.mpg.de',
       license='MIT',
       packages=find_packages(),
+      include_package_data=True,    #Install binary data, needed for fpga firmware
       install_requires=[
           'katpoint',
           'katcp',
