@@ -55,7 +55,10 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
-    "epta_directory": "epta",                       # Data will be read from /mnt/epta_directory
+    "mode": "Timing",
+    "cod_dm": 20,                        # dm for coherent filterbanking
+    "npol": 1,                           # for search mode product, output 1 (Intensity), 2 (AABB), or 4 (Coherence) products
+    "epta_directory": "epta",            # Data will be read from /mnt/epta_directory
     "nchannels": 1024,
     "nbins": 1024,
     "tempo2_telescope_name": "Effelsberg",
@@ -210,8 +213,8 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall("paz {} -m sum.tscrunch".format(self.freq_zap_list))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
-            self._syscall(
-                "paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
+            #self._syscall(
+            #    "paz -w '{}' -m sum.fscrunch".format(self.time_zap_list)) #disabled at the moment as this is taking up a lot of CPU time
             self._syscall(
                 "psrplot -p freq+ -jDp -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
@@ -506,14 +509,14 @@ class EddPulsarPipeline(EDDPipeline):
         central_freq = self._config['input_data_streams'][
             'polarization_0']["central_freq"]
 
-        #Check if source is a pulsar or calibrator, if not error
-        epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
-        log.debug("Checking epta file {}".format(epta_file))
-        self.pulsar_flag = is_accessible(epta_file)
-        if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
-            if (parse_tag(self._source_name) != "FB"):
-                error = "source {} is not pulsar or calibrator".format(self._source_name)
-                raise EddPulsarPipelineError(error)
+        if self._config["mode"] == "Timing":
+            epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
+            log.debug("Checking epta file {}".format(epta_file))
+            self.pulsar_flag = is_accessible(epta_file)
+            if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
+                if (parse_tag(self._source_name) != "FB"):
+                    error = "source {} is not pulsar or calibrator".format(self._source_name)
+                    raise EddPulsarPipelineError(error)
 
         log.info("starting pipeline")
         self._state = "measurement_starting"
@@ -539,7 +542,7 @@ class EddPulsarPipeline(EDDPipeline):
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
             "d", ":").replace("m", ":").replace("s", "")
         header["key"] = self._dada_buffers[0]
-        if header["instrument"] == "SKARAB": 
+        if header["instrument"] == "SKARAB":
             header["mc_source"] = self._config['input_data_streams']['polarization_0'][
             "ip"]
         else:
@@ -564,51 +567,66 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
-        try:
-            self.in_path = os.path.join("/mnt/dspsr_output/",
-                                        tdate, self._source_name, str(central_freq), tstr, "raw_data")
-            self.out_path = os.path.join(
-                "/mnt/dspsr_output/", tdate, self._source_name, str(central_freq), tstr, "combined_data")
-            log.debug("Creating directories")
-            log.debug("in path {}".format(self.in_path))
-            log.debug("in path {}".format(self.out_path))
-            if not os.path.isdir(self.in_path):
-                os.makedirs(self.in_path)
-            if not os.path.isdir(self.out_path):
-                os.makedirs(self.out_path)
-            os.chdir(self.in_path)
-            log.debug("Change to workdir: {}".format(os.getcwd()))
-            log.debug("Current working directory: {}".format(os.getcwd()))
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
+        if self._config["mode"] == "Timing":
+            try:
+                self.in_path = os.path.join("/mnt/dspsr_output/",
+                                            tdate, self._source_name, str(central_freq), tstr, "raw_data")
+                self.out_path = os.path.join(
+                    "/mnt/dspsr_output/", tdate, self._source_name, str(central_freq), tstr, "combined_data")
+                log.debug("Creating directories")
+                log.debug("in path {}".format(self.in_path))
+                log.debug("in path {}".format(self.out_path))
+                if not os.path.isdir(self.in_path):
+                    os.makedirs(self.in_path)
+                if not os.path.isdir(self.out_path):
+                    os.makedirs(self.out_path)
+                os.chdir(self.in_path)
+                log.debug("Change to workdir: {}".format(os.getcwd()))
+                log.debug("Current working directory: {}".format(os.getcwd()))
+            except Exception as error:
+                raise EddPulsarPipelineError(str(error))
+        if self._config["mode"] == "Searchng":
+            try:
+                self.in_path = os.path.join("/mnt/filterbank_output/",
+                    tdate, self._source_name, str(central_freq), tstr, "raw_data")
+                log.debug("Creating directories")
+                log.debug("in path {}".format(self.in_path))
+                if not os.path.isdir(self.in_path):
+                    os.makedirs(self.in_path)
+                os.chdir(self.in_path)
+                log.debug("Change to workdir: {}".format(os.getcwd()))
+                log.debug("Current working directory: {}".format(os.getcwd()))
+            except Exception as error:
+                raise EddPulsarPipelineError(str(error))
 
         os.chdir("/tmp/")
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        self.pulsar_flag_with_R = is_accessible(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:-2])))
-        log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
-        if (parse_tag(self._source_name) == "default") & is_accessible(epta_file):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f {} -pred'.format(
-                self.numa_number, self.__core_sets['single'],
-                epta_file).split()
+        if self._config["mode"] == "Timing":
+            self.pulsar_flag_with_R = is_accessible(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:-2])))
+            log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
+            if (parse_tag(self._source_name) == "default") & is_accessible(epta_file):
+                cmd = 'numactl -m {} taskset -c {} tempo2 -f {} -pred'.format(
+                    self.numa_number, self.__core_sets['single'],
+                    epta_file).split()
 
-            cmd.append("{} {} {} {} {} 24 2 3599.999999999".format(self._config["tempo2_telescope_name"], Time.now().mjd - 1, Time.now().mjd + 1, float(central_freq) - 200, float(central_freq) + 200))
-            log.debug("Command to run: {}".format(cmd))
-            yield command_watcher(cmd, )
-            attempts = 0
-            retries = 5
-            while True:
-                if attempts >= retries:
-                    error = "could not read t2pred.dat"
-                    raise EddPulsarPipelineError(error)
-                else:
-                    sleep(1)
-                    if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
-                        log.debug('found {}/t2pred.dat'.format(os.getcwd()))
-                        break
+                cmd.append("{} {} {} {} {} 24 2 3599.999999999".format(self._config["tempo2_telescope_name"], Time.now().mjd - 1, Time.now().mjd + 1, float(central_freq) - 200, float(central_freq) + 200))
+                log.debug("Command to run: {}".format(cmd))
+                yield command_watcher(cmd, )
+                attempts = 0
+                retries = 5
+                while True:
+                    if attempts >= retries:
+                        error = "could not read t2pred.dat"
+                        raise EddPulsarPipelineError(error)
                     else:
-                        attempts += 1
+                        sleep(1)
+                        if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
+                            log.debug('found {}/t2pred.dat'.format(os.getcwd()))
+                            break
+                        else:
+                            attempts += 1
 
         self.dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
@@ -670,36 +688,49 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(
             self._source_name))
+        if self._config["mode"] == "Timing":
+            epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
+            if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
+                cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+                        numa=self.numa_number,
+                        args=self._config["dspsr_params"]["args"],
+                        nchan="-F {}:D".format(self._config["nchannels"]),
+                        nbin="-b {}".format(self._config["nbins"]),
+                        name=self._source_name,
+                        predictor="/tmp/t2pred.dat",
+                        parfile=epta_file,
+                        cpus=",".join(self.__core_sets['dspsr']),
+                        cuda_number=self.cuda_number,
+                        keyfile=self.dada_key_file.name)
 
-        epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
-        if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
-                    numa=self.numa_number,
-                    args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self._config["nchannels"]),
-                    nbin="-b {}".format(self._config["nbins"]),
-                    name=self._source_name,
-                    predictor="/tmp/t2pred.dat",
-                    parfile=epta_file,
-                    cpus=",".join(self.__core_sets['dspsr']),
-                    cuda_number=self.cuda_number,
-                    keyfile=self.dada_key_file.name)
-
-        elif parse_tag(self._source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                    numa=self.numa_number,
-                    args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self._config["nchannels"]),
-                    name=self._source_name,
-                    cpus=",".join(self.__core_sets['dspsr']),
-                    cuda_number=self.cuda_number,
-                    keyfile=self.dada_key_file.name)
-        else:
-            error = "source is unknown"
-            raise EddPulsarPipelineError(error)
+            elif parse_tag(self._source_name) == "R":
+                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+                        numa=self.numa_number,
+                        args=self._config["dspsr_params"]["args"],
+                        nchan="-F {}:D".format(self._config["nchannels"]),
+                        name=self._source_name,
+                        cpus=",".join(self.__core_sets['dspsr']),
+                        cuda_number=self.cuda_number,
+                        keyfile=self.dada_key_file.name)
+            else:
+                error = "source is unknown"
+                raise EddPulsarPipelineError(error)
+        if self._config["mode"] == "Searchng":
+            cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -dm {DM} -p {npol} -x 8192 -cpu {cpus} -cuda {cuda_number} -o {name}.fits {keyfile}".format(
+                numa=self.numa_number,
+                npol=self._config["npol"],
+                DM=self._config["cod_dm"],
+                nchan=self._config["nchannels"],
+                name=self._source_name,
+                cpus=",".join(self.__core_sets['dspsr']),
+                cuda_number=self.cuda_number,
+                keyfile=self.dada_key_file.name)
 
         log.debug("Running command: {0}".format(cmd))
-        log.info("Staring DSPSR")
+        if self._config["mode"] == "Timing":
+            log.info("Staring DSPSR")
+        if self._config["mode"] == "Searchng":
+            log.info("Staring DIGIFITS")
         self._dspsr = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
 
@@ -717,7 +748,7 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header} --quiet".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --quiet".format(
             numa=self.numa_number, cpu=",".join(self.__core_sets['mkrecv']), dada_header=self.dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
@@ -728,22 +759,23 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        log.info("Staring archive monitor")
-        self.archive_observer = Observer()
-        self.archive_observer.daemon = False
-        log.info("Input directory: {}".format(self.in_path))
-        log.info("Output directory: {}".format(self.out_path))
-        log.info("Setting up ArchiveAdder handler")
-        self.handler = ArchiveAdder(self.out_path)
+        if self._config["mode"] == "Timing":
+            log.info("Staring archive monitor")
+            self.archive_observer = Observer()
+            self.archive_observer.daemon = False
+            log.info("Input directory: {}".format(self.in_path))
+            log.info("Output directory: {}".format(self.out_path))
+            log.info("Setting up ArchiveAdder handler")
+            self.handler = ArchiveAdder(self.out_path)
 
-        self.archive_observer.schedule(
-            self.handler, self.in_path, recursive=False)
-        log.info("Starting directory monitor")
-        self.archive_observer.start()
+            self.archive_observer.schedule(
+                self.handler, self.in_path, recursive=False)
+            log.info("Starting directory monitor")
+            self.archive_observer.start()
 
-        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
-            self._png_monitor, 5000)
-        self._png_monitor_callback.start()
+            self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
+                self._png_monitor, 5000)
+            self._png_monitor_callback.start()
         self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
         log.debug("Took {} s to start".format(self._timer * 86400))
@@ -761,7 +793,8 @@ class EddPulsarPipeline(EDDPipeline):
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
         log.debug("Stopping")
-        self._png_monitor_callback.stop()
+        if self._config["mode"] == "Timing":
+            self._png_monitor_callback.stop()
         process = [self._mkrecv_ingest_proc,
                    self._polnmerge_proc]
         for proc in process:
