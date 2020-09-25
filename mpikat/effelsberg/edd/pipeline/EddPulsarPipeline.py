@@ -65,8 +65,7 @@ DEFAULT_CONFIG = {
     "merge_application": "edd_merge",
     "npart": 2,
     "input_data_streams":
-    {
-        "polarization_0":
+    [
         {
             "source": "",
             "description": "",
@@ -81,7 +80,6 @@ DEFAULT_CONFIG = {
             "predecimation_factor": 2,
             "central_freq": 1200
         },
-        "polarization_1":
         {
             "source": "",
             "description": "",
@@ -96,7 +94,7 @@ DEFAULT_CONFIG = {
             "predecimation_factor": 2,
             "central_freq": 1200,
         }
-    },
+    ],
     "dada_header_params":
     {
         "filesize": 32000000000,
@@ -458,7 +456,7 @@ class EddPulsarPipeline(EDDPipeline):
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
-        self.sync_epoch = self._config["input_data_streams"]["polarization_0"]["sync_time"]
+        self.sync_epoch = self._config["input_data_streams"][0]["sync_time"]
         log.info("sync_epoch = {}".format(self.sync_epoch))
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
@@ -490,8 +488,7 @@ class EddPulsarPipeline(EDDPipeline):
         subscannum = self.__eddDataStore.getTelescopeDataItem("subscannum")
         log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
 
-        central_freq = self._config['input_data_streams'][
-            'polarization_0']["central_freq"]
+        central_freq = self._config['input_data_streams'][0]["central_freq"]
 
         if self._config["mode"] == "Timing":
             epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
@@ -525,21 +522,21 @@ class EddPulsarPipeline(EDDPipeline):
             "d", ":").replace("m", ":").replace("s", "")
         header["key"] = self._dada_buffers[0]
         if header["instrument"] == "SKARAB":
-            header["mc_source"] = self._config['input_data_streams']['polarization_0'][
+            header["mc_source"] = self._config['input_data_streams'][0][
             "ip"]
         else:
-            header["mc_source"] = self._config['input_data_streams']['polarization_0'][
-            "ip"] + "," + self._config['input_data_streams']['polarization_1']["ip"]
+            header["mc_source"] = self._config['input_data_streams'][0][
+            "ip"] + "," + self._config['input_data_streams'][1]["ip"]
         header["frequency_mhz"] = central_freq
-        bandwidth = self._config['input_data_streams']['polarization_0'][
-            "sample_rate"] / self._config['input_data_streams']['polarization_0']["predecimation_factor"] / 2 / 1e6
+        bandwidth = self._config['input_data_streams'][0][
+            "sample_rate"] / self._config['input_data_streams'][0]["predecimation_factor"] / 2 / 1e6
         #header["bandwidth"] = bandwidth
         header["mc_streaming_port"] = self._config[
-            'input_data_streams']['polarization_0']["port"]
+            'input_data_streams'][0]["port"]
         header["interface"] = numa.getFastestNic(self.numa_number)[1]['ip']
         header["sync_time"] = self.sync_epoch
-        header["sample_clock"] = float(self._config['input_data_streams']['polarization_0'][
-                                       "sample_rate"] / self._config['input_data_streams']['polarization_0']["predecimation_factor"])
+        header["sample_clock"] = float(self._config['input_data_streams'][0][
+                                       "sample_rate"] / self._config['input_data_streams'][0]["predecimation_factor"])
         #header["tsamp"] = 1 / (2.0 * bandwidth)
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format( scannum, subscannum)
