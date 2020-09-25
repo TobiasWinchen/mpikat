@@ -86,7 +86,7 @@ DEFAULT_CONFIG = {
 #for i in range(8):
 #    ip = "239.0.0.{}".format(120+i)
 #    DEFAULT_CONFIG["output_data_streams"]['Output_{}'.format(i)] = {"format": "Skarab:1", "ip": ip, "port": "7152"}
-DEFAULT_CONFIG["output_data_streams"] = { "lower_subband": { "format": "Skarab:1", "ip": "239.0.0.120+3", "port": "7152", "central_freq":None, "sync_time": None, "predecimation_factor": None}, "upper_subband": { "format": "Skarab:1", "ip": "239.0.0.124+3", "port": "7152", "central_freq":None, "sync_time": None, "sample_rate":None, "predecimation_factor": None } }
+DEFAULT_CONFIG["output_data_streams"] = { "lower_subband": { "format": "Skarab:1", "ip": "239.0.0.120+3", "port": "7152", "central_freq":None, "sync_time": None, "sample_rate":None, "predecimation_factor": None}, "upper_subband": { "format": "Skarab:1", "ip": "239.0.0.124+3", "port": "7152", "central_freq":None, "sync_time": None, "sample_rate":None, "predecimation_factor": None } }
 
 
 class SkarabPipeline(EDDPipeline):
