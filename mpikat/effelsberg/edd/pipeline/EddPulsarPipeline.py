@@ -64,6 +64,7 @@ DEFAULT_CONFIG = {
     "tempo2_telescope_name": "Effelsberg",
     "merge_application": "edd_merge",
     "npart": 2,
+    "sync_datastream": "focus_cabin_packetizer:h_polarization" ,
     "input_data_streams":
     [
         {
@@ -456,8 +457,15 @@ class EddPulsarPipeline(EDDPipeline):
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
-        self.sync_epoch = self._config["input_data_streams"][0]["sync_time"]
+
+        # The master contoller provides the data store IP as default gloal
+        # config to all pipelines
+        self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
+
+        log.warning("USING SYNC EPOCH FROM SYNC DATASTREAM OPTION. THIS IS A HACK AND SHOULD BE REMOVED!")
+        self.sync_epoch = self.__eddDataStore.getDataStream(self._config['sync_datastream'])['sync_time']
         log.info("sync_epoch = {}".format(self.sync_epoch))
+
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
@@ -466,9 +474,6 @@ class EddPulsarPipeline(EDDPipeline):
             log.error("Not a directory {} !".format(self.epta_dir))
             raise RuntimeError("Epta directory is no directory: {}".format(self.epta_dir))
 
-        # The master contoller provides the data store IP as default gloal
-        # config to all pipelines
-        self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
 
 
     @state_change(target="ready", allowed=["configured"], intermediate="capture_starting")
