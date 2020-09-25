@@ -222,19 +222,22 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Connect data streams with high level description")
         for product in self._config['products'].itervalues():
+            log.debug("checking product: {}".format(product["id"]))
             if not "input_data_streams" in product:
                 log.warning("Product: {} without input data streams".format(product['id']))
                 continue
             counter = 0
             for k in product["input_data_streams"]:
                 if isinstance(product["input_data_streams"], dict):
+                    log.debug("input stream of type dict, k = {}".format(k))
                     inputStream = product["input_data_streams"][k]
                 elif isinstance(product["input_data_streams"], list):
                     inputStream = k
                     k = counter
                     counter += 1
+                    log.debug("input stream of type list, k = {}".format(k))
                 else:
-                    raise RuntimeError("Input streams has to be dict ofr list, got: {}!".format(type(product["input_data_streams"])))
+                    raise RuntimeError("Input streams has to be dict or list, got: {}!".format(type(product["input_data_streams"])))
 
                 datastream = self.__eddDataStore.getDataFormatDefinition(inputStream['format'])
                 datastream.update(inputStream)
@@ -244,7 +247,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 s = inputStream["source"]
 
                 if not self.__eddDataStore.hasDataStream(s):
-                        raise RuntimeError("Unknown data stream {} !".format(s))
+                    log.error("Unknown data stream {}. Corresponding input stream: {}".format(s, inputStream))
+                    raise RuntimeError("Unknown data stream {} !".format(s))
 
                 log.debug("Updating {} of {} - with {}".format(k, product['id'], s))
                 datastream.update(self.__eddDataStore.getDataStream(s))
@@ -493,7 +497,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             if product['id'] in self.__controller:
                 log.warning("Controller for {} already there".format(product['id']))
             else:
-                log.debug("Adding new controller for {}".format(packetizer["id"]))
+                log.debug("Adding new controller for {}".format(product["id"]))
             if "type" in product and product["type"] == "roach2":
                     self.__controller[product['id']] = EddRoach2ProductController(self, product['id'],
                                                                             (self._r2rm_host, self._r2rm_port))
