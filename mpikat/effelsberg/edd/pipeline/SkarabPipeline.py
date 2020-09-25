@@ -249,6 +249,10 @@ class SkarabPipeline(EDDPipeline):
         descr = {"description":"Channelized complex voltage ouptut.",
                 "ip": None,
                 "port": None,
+                "sample_rate":None,
+                "central_freq":None,
+                "sync_time": None,
+                "predecimation_factor": None
                 }
         dataStore.addDataFormatDefinition("Skarab:1", descr)
 
