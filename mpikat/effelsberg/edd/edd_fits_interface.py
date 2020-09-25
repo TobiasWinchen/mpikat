@@ -20,7 +20,7 @@ from katcp.kattypes import (request, return_reply)
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer
 import mpikat.utils.numa as numa
 
-log = logging.getLogger("mpikat.spead_fi_server")
+log = logging.getLogger("mpikat.edd_fits_interface")
 
 
 class FitsWriterConnectionManager(Thread):
@@ -206,7 +206,6 @@ class FitsInterfaceServer(EDDPipeline):
         EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[],
             id="fits_interface", type="fits_interface",
             fits_writer_ip="0.0.0.0", fits_writer_port=5002))
-        self._configured = False
         self._fw_connection_manager = None
         self._capture_thread = None
         self._shutdown = False
@@ -227,12 +226,12 @@ class FitsInterfaceServer(EDDPipeline):
             log.debug("Conenction manager thread cleaned")
 
 
+    @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
         log.info("Configuring Fits interface")
         log.debug("Configuration string: '{}'".format(config_json))
 
-        self.state = "configuring"
         yield self.set(config_json)
 
         cfs = json.dumps(self._config, indent=4)
@@ -260,10 +259,8 @@ class FitsInterfaceServer(EDDPipeline):
         self._fw_connection_manager = FitsWriterConnectionManager(self._config["fits_writer_ip"], self._config["fits_writer_port"])
         self._fw_connection_manager.start()
 
-        #self._stop_capture()
-        self._configured = True
 
-
+    @state_change(target="ready", allowed=["configured"], intermediate="capture_starting")
     @coroutine
     def capture_start(self):
         """
@@ -286,6 +283,7 @@ class FitsInterfaceServer(EDDPipeline):
         self._capture_thread.start()
 
 
+    @state_change(target="measuring",  intermediate="measurement_starting")
     @coroutine
     def measurement_start(self):
         log.info("Starting FITS interface data transfer as soon as connection is established ...")
@@ -293,6 +291,7 @@ class FitsInterfaceServer(EDDPipeline):
         self._fw_connection_manager._is_measuring.set()
 
 
+    @state_change(target="ready", allowed=["measuring"], intermediate="measurement_stopping")
     @coroutine
     def measurement_stop(self):
         log.info("Stopping FITS interface data transfer")
