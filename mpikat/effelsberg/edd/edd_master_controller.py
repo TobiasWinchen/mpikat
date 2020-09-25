@@ -83,7 +83,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         @detail  Reread the layout of the edd setup from the ansible data set.
         @return  katcp reply object [[[ !product-list ok | (fail [error description]) <number of configured producers> ]]
         """
+        log.info("reset-edd-layout requested")
         self.__eddDataStore.updateProducts()
+        self.__controller = {}
         # add a control handle for each product
         #for productid in self.__eddDataStore.products:
         #    product = self.__eddDataStore.getProduct(productid)
@@ -354,6 +356,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         @brief   Loads a provision configuration and dispatch it to ansible and sets the data streams for all products
 
         """
+        log.info("Provision request received")
         @coroutine
         def wrapper():
             try:
@@ -379,7 +382,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 NAME                 to load NAME.json and NAME.yml
                 NAME1.yml;NAME2.json to load different yml / json configs
         """
-
         os.chdir(self.__edd_ansible_git_repository_folder)
         log.debug("Provision description {} from directory {}".format(description, os.getcwd()))
         if description.startswith('"'):
@@ -481,19 +483,21 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         for packetizer in config['packetizers'].itervalues():
             if packetizer["id"] in self.__controller:
-                log.debug("Controller for {} already there".format(packetizer["id"]))
+                log.warning("Controller for {} already there, replacing with new controller!".format(packetizer["id"]))
             else:
                 log.debug("Adding new controller for {}".format(packetizer["id"]))
-                self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
-                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+            self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
+            self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
         for product in config["products"].itervalues():
             if product['id'] in self.__controller:
-                log.debug("Controller for {} already there".format(product['id']))
-            elif "type" in product and product["type"] == "roach2":
+                log.warning("Controller for {} already there".format(product['id']))
+            else:
+                log.debug("Adding new controller for {}".format(packetizer["id"]))
+            if "type" in product and product["type"] == "roach2":
                     self.__controller[product['id']] = EddRoach2ProductController(self, product['id'],
                                                                             (self._r2rm_host, self._r2rm_port))
-            elif product['id'] not in self.__controller:
+            elif product['id']:
                 if product['id'] in self.__eddDataStore.products:
                     cfg = self.__eddDataStore.getProduct(product['id'])
                     cfg.update(product)
