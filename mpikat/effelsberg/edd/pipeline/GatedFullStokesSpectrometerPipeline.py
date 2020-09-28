@@ -522,7 +522,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
                 else:
                     idx1modulo = self._config['idx1_modulo']
 
-                cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
+                cmd = "taskset -c {physcpu} mkrecv_v4 --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
                 --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
                 --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1modulo=idx1modulo,
                         **cfg )
