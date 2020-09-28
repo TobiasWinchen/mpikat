@@ -531,7 +531,7 @@ class GatedSpectrometerSpeadHandler(object):
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
-            packet.reference_time += 0.1000
+            packet.reference_time += 0.001
 
         if packet.reference_time > self.__now:
             self.__now = packet.reference_time
