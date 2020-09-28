@@ -410,7 +410,7 @@ if __name__ == "__main__":
         help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(known_packetizers)))
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
-    parser.add_argument('--nbits', dest='nbits', type=long, default=8,
+    parser.add_argument('--nbits', dest='nbits', type=long,
         help='The number of bits per output sample')
     parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)')
