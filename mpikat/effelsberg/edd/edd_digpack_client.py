@@ -142,8 +142,10 @@ class DigitiserPacketiserClient(object):
         try:
             args = valid_modes[int(rate)]
         except KeyError as error:
-            log.error(msg)
-            raise DigitiserPacketiserError(msg)
+            pos_freqs = "\n".join(["  - {} Hz ".format(f) for f in valid_modes.iterkeys()])
+            error_msg = "Frequency {} Hz not in possible frequencies:\n{}".format(rate, pos_freqs)
+            log.error(error_msg)
+            raise DigitiserPacketiserError(error_msg)
 
         attempts = 0
         while True:
