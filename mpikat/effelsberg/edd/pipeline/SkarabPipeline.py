@@ -140,8 +140,10 @@ class SkarabPipeline(EDDPipeline):
             log.debug("Stripping outputs from cfg before check")
             # Do not check output data streams, as the only relevant thing is here
             # that they are consecutive
-            outputs = cfg.pop['output_data_streams']
+            outputs = cfg.pop('output_data_streams')
+            log.debug("Pipeline set")
             EDDPipeline.set(self, cfg)
+            log.debug("Re-adding outputs")
             self._config['output_data_streams'] = outputs
         else:
             EDDPipeline.set(self, cfg)
