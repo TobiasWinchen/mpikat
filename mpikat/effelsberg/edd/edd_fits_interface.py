@@ -542,7 +542,7 @@ class GatedSpectrometerSpeadHandler(object):
         else:
             fw_pkt, counter = self.__packages_in_preparation[packet.reference_time]
             counter += 1
-        log.debug("   This is {} / {} parts for reference_time: {}".format(counter , self.__number_of_input_streams / 2, packet.reference_time))
+        log.debug("   This is {} / {} parts for reference_time: {:.3f}".format(counter , self.__number_of_input_streams / 2, packet.reference_time))
 
         # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
         # but ctypes may not be aligned
@@ -555,9 +555,9 @@ class GatedSpectrometerSpeadHandler(object):
         ctypes.memmove(ctypes.byref(fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
                 packet.data.size * 4 - 4)
 
-        if counter == self.__number_of_input_streams / 2:
+        if counter == self.__number_of_input_streams // 2:
             # Fill header fields + output data
-            log.debug("Got all parts for reference_time {} - Finalizing".format(packet.reference_time))
+            log.debug("Got all parts for reference_time {:.3f} - Finalizing".format(packet.reference_time))
 
             # Convert timestamp to datetimestring in UTC
             def local_to_utc(t):
