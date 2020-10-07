@@ -56,15 +56,15 @@ DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
     "mode": "Timing",
-    "cod_dm": 20,                        # dm for coherent filterbanking
-    "npol": 1,                           # for search mode product, output 1 (Intensity), 2 (AABB), or 4 (Coherence) products
-    "epta_directory": "epta",            # Data will be read from /mnt/epta_directory
-    "nchannels": 1024,
-    "nbins": 1024,
+    "cod_dm": 0,                            # dm for coherent filterbanking, tested up to 3000                
+    "npol": 1,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
+    "epta_directory": "epta",                # Data will be read from /mnt/epta_directory
+    "nchannels": 1024,                       # only used in timing mode
+    "nbins": 1024,                           # only used in timing mode   
     "tempo2_telescope_name": "Effelsberg",
     "merge_application": "edd_merge",
     "npart": 2,
-    "sync_datastream": "focus_cabin_packetizer:h_polarization" ,
+    "sync_datastream": "focus_cabin_packetizer:h_polarization",
     "input_data_streams":
     [
         {
@@ -107,6 +107,7 @@ DEFAULT_CONFIG = {
         "npol": 2,
         "nchan": 1,
         "bandwidth": 800,
+        "frequency_mhz": 1200,
         "resolution": 1,
         "tsamp": 0.000625,
         "dsb": 1,
@@ -493,7 +494,7 @@ class EddPulsarPipeline(EDDPipeline):
         subscannum = self.__eddDataStore.getTelescopeDataItem("subscannum")
         log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
 
-        central_freq = self._config['input_data_streams'][0]["central_freq"]
+        
 
         if self._config["mode"] == "Timing":
             epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
@@ -505,21 +506,20 @@ class EddPulsarPipeline(EDDPipeline):
                     raise EddPulsarPipelineError(error)
 
         self._timer = Time.now()
-
         #Setting blank image
         self._fscrunch.set_value(BLANK_IMAGE)
         self._tscrunch.set_value(BLANK_IMAGE)
         self._profile.set_value(BLANK_IMAGE)
 
         #writing mkrecv header
-        self._central_freq.set_value(str(central_freq))
-        self._source_name_sensor.set_value(self._source_name)
-        self._nchannels.set_value(self._config["nchannels"])
-        self._nbins.set_value(self._config["nbins"])
-
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
         c = SkyCoord("{} {}".format(ra, decl), unit=(u.deg, u.deg))
         header = self._config["dada_header_params"]
+        central_freq = header["frequency_mhz"]
+        self._central_freq.set_value(str(header["frequency_mhz"]))
+        self._source_name_sensor.set_value(self._source_name)
+        self._nchannels.set_value(self._config["nchannels"])
+        self._nbins.set_value(self._config["nbins"])
         header["telescope"] = self._config["tempo2_telescope_name"]
         header["ra"] = c.to_string("hmsdms").split(" ")[0].replace(
             "h", ":").replace("m", ":").replace("s", "")
@@ -532,19 +532,14 @@ class EddPulsarPipeline(EDDPipeline):
         else:
             header["mc_source"] = self._config['input_data_streams'][0][
             "ip"] + "," + self._config['input_data_streams'][1]["ip"]
-        header["frequency_mhz"] = central_freq
-        bandwidth = self._config['input_data_streams'][0][
-            "sample_rate"] / self._config['input_data_streams'][0]["predecimation_factor"] / 2 / 1e6
-        #header["bandwidth"] = bandwidth
         header["mc_streaming_port"] = self._config[
             'input_data_streams'][0]["port"]
         header["interface"] = numa.getFastestNic(self.numa_number)[1]['ip']
         header["sync_time"] = self.sync_epoch
         header["sample_clock"] = float(self._config['input_data_streams'][0][
                                        "sample_rate"] / self._config['input_data_streams'][0]["predecimation_factor"])
-        #header["tsamp"] = 1 / (2.0 * bandwidth)
         header["source_name"] = self._source_name
-        header["obs_id"] = "{0}_{1}".format( scannum, subscannum)
+        header["obs_id"] = "{0}_{1}".format(scannum, subscannum)
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
 
@@ -569,10 +564,10 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("Current working directory: {}".format(os.getcwd()))
             except Exception as error:
                 raise EddPulsarPipelineError(str(error))
-        if self._config["mode"] == "Searchng":
+        if self._config["mode"] == "Searching":
             try:
                 self.in_path = os.path.join("/mnt/filterbank_output/",
-                    tdate, self._source_name, str(central_freq), tstr, "raw_data")
+                    tdate, self._source_name, str(central_freq), tstr)
                 log.debug("Creating directories")
                 log.debug("in path {}".format(self.in_path))
                 if not os.path.isdir(self.in_path):
@@ -689,12 +684,19 @@ class EddPulsarPipeline(EDDPipeline):
             else:
                 error = "source is unknown"
                 raise EddPulsarPipelineError(error)
-        if self._config["mode"] == "Searchng":
-            cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -dm {DM} -p {npol} -x 8192 -cpu {cpus} -cuda {cuda_number} -o {name}.fits {keyfile}".format(
+        if self._config["mode"] == "Searching":
+            if self._config["npol"] == 1:
+                self._decimation = 8
+                self._filterbank_nchannels = 8192
+            else:
+                self._decimation = 11
+                self._filterbank_nchannels = 11264
+            cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -dm {DM} -p {npol} -decimation {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}.fits {keyfile}".format(
                 numa=self.numa_number,
                 npol=self._config["npol"],
                 DM=self._config["cod_dm"],
-                nchan=self._config["nchannels"],
+                nchan=self._filterbank_nchannels,
+                decimation=self._decimation,
                 name=self._source_name,
                 cpus=",".join(self.__core_sets['dspsr']),
                 cuda_number=self.cuda_number,
@@ -703,7 +705,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Running command: {0}".format(cmd))
         if self._config["mode"] == "Timing":
             log.info("Staring DSPSR")
-        if self._config["mode"] == "Searchng":
+        if self._config["mode"] == "Searching":
             log.info("Staring DIGIFITS")
         self._dspsr = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
