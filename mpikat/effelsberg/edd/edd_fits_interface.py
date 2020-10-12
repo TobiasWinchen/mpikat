@@ -387,7 +387,10 @@ class SpeadCapture(Thread):
                 continue
             else:
                 self._complete_heaps += 1
-            self._handler(heap)
+            try:
+                self._handler(heap)
+            except Exception as E:
+                log.error("Error handling heap. Cought exception:\n{}".format(E))
 
 
 
@@ -503,6 +506,15 @@ class GatedSpectrometerSpeadHandler(object):
             self.ig.add_item(5640, "data", "", (self.nchannels,), dtype="<f")
             # Reprocess heap to get data
             items = self.ig.update(heap)
+
+        if len(items.keys()) != len(self.ig.items()):
+            missing_keys = []
+            for key in self.ig.items():
+                if key[0] not in items:
+                    missing_keys.append(key[0])
+            log.warning("Received invalid heap, containing only {} / {} keys. Missign keys:\n {}".format(len(items.keys()), len(self.ig.items()), " \n".join(missing_keys)))
+            return
+
 
 
         class SpeadPacket:
