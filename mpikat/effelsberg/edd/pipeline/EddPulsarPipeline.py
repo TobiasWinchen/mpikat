@@ -577,6 +577,19 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("Current working directory: {}".format(os.getcwd()))
             except Exception as error:
                 raise EddPulsarPipelineError(str(error))
+        if self._config["mode"] == "Baseband":
+            try:
+                self.in_path = os.path.join("/mnt/baseband_output/",
+                    tdate, self._source_name, str(central_freq), tstr)
+                log.debug("Creating directories")
+                log.debug("in path {}".format(self.in_path))
+                if not os.path.isdir(self.in_path):
+                    os.makedirs(self.in_path)
+                os.chdir(self.in_path)
+                log.debug("Change to workdir: {}".format(os.getcwd()))
+                log.debug("Current working directory: {}".format(os.getcwd()))
+            except Exception as error:
+                raise EddPulsarPipelineError(str(error))
 
         os.chdir("/tmp/")
         ####################################################
@@ -701,12 +714,18 @@ class EddPulsarPipeline(EDDPipeline):
                 cpus=",".join(self.__core_sets['dspsr']),
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
+        if self._config["mode"] == "Baseband":
+            cmd = "numactl -m {numa} dada_dbdisk -D ./ -o -z -s -k {keyfile}".format(
+                numa=self.numa_number,
+                keyfile=self.dada_key_file.name)
 
         log.debug("Running command: {0}".format(cmd))
         if self._config["mode"] == "Timing":
             log.info("Staring DSPSR")
         if self._config["mode"] == "Searching":
             log.info("Staring DIGIFITS")
+        if self._config["mode"] == "Baseband":
+            log.info("Staring dada_dbdisk")
         self._dspsr = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
 
@@ -743,12 +762,10 @@ class EddPulsarPipeline(EDDPipeline):
             log.info("Output directory: {}".format(self.out_path))
             log.info("Setting up ArchiveAdder handler")
             self.handler = ArchiveAdder(self.out_path)
-
             self.archive_observer.schedule(
                 self.handler, self.in_path, recursive=False)
             log.info("Starting directory monitor")
             self.archive_observer.start()
-
             self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
                 self._png_monitor, 5000)
             self._png_monitor_callback.start()
@@ -772,11 +789,6 @@ class EddPulsarPipeline(EDDPipeline):
         if (parse_tag(self._source_name) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
         log.info("reset DADA buffer")
-        log.info("Resetting dadc buffer")
-        # yield self._reset_ring_buffer("dadc", self.numa_number)
-        #cmd = "dbreset -k {0} --log_level debug".format("dadc")
-        #log.debug("Running command: {0}".format(cmd))
-        # yield command_watcher(cmd)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         del self._subprocessMonitor
@@ -785,8 +797,7 @@ class EddPulsarPipeline(EDDPipeline):
     @state_change(target="idle", intermediate="deconfiguring", error='panic')
     @coroutine
     def deconfigure(self):
-        """@brief deconfigure the dspsr pipeline."""
-        #log.info("Deconfiguring pipeline")
+        """@brief deconfigure the pipeline."""
         log.debug("Destroying dada buffers")
 
         for k in self._dada_buffers:
