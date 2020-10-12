@@ -1,5 +1,5 @@
 from __future__ import print_function, division
-from tornado.gen import coroutine
+from tornado.gen import coroutine, sleep
 import logging
 import socket
 import time
@@ -265,6 +265,9 @@ class FitsInterfaceServer(EDDPipeline):
     def capture_start(self):
         """
         """
+        #recheck if there is a connection manager
+
+
         #try:
         #    fw_socket = self._fw_connection_manager.get_transmit_socket()
         #except Exception as error:
@@ -303,9 +306,9 @@ class FitsInterfaceServer(EDDPipeline):
                 log.warning("Queue not empties after flush!")
                 self._fw_connection_manager.clear_queue()
                 break
-            yield time.sleep(0.1)
+            yield sleep(0.1)
             counter += 1
-        yield time.sleep(0.1)
+        yield sleep(0.1)
         log.info("Dropping connection.")
         yield self._fw_connection_manager.drop_connection()
 
@@ -538,7 +541,7 @@ class GatedSpectrometerSpeadHandler(object):
         packet.integration_period = (packet.naccumulate * packet.fft_length) / float(packet.sampling_rate)
 
         # The reference time is in the center of the integration # period
-        packet.reference_time = float(packet.sync_time + packet.timestamp_count / float(packet.sampling_rate) + packet.integration_period/ 2.)
+        packet.reference_time = float(packet.sync_time) + float(packet.timestamp_count) / float(packet.sampling_rate) + float(packet.integration_period/ 2.)
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
