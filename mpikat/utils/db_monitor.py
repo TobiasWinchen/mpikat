@@ -23,11 +23,19 @@ class DbMonitor(object):
         self._mon_thread = None
         self._callback = callback
 
+        self.__parsed_lines = 0
+        self.__headersize = 12 # Skip first 12 lines
+
     def _stdout_parser(self, line):
         """
         @brief Parse a line of output of the subprocess.
         """
+        self.__parsed_lines += 1
+        if self.__parsed_lines < self.__headersize:
+            return None
+
         line = line.strip()
+
         try:
             values = map(int, line.split())
             free, full, clear, written, read = values[5:]
