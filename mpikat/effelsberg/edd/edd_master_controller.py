@@ -487,11 +487,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         for packetizer in config['packetizers'].itervalues():
             if packetizer["id"] in self.__controller:
-                log.warning("Controller for {} already there, replacing with new controller!".format(packetizer["id"]))
+                log.warning("Controller for {} already there, not replacing with new controller!".format(packetizer["id"]))
             else:
                 log.debug("Adding new controller for {}".format(packetizer["id"]))
-            self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
-            self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+                self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
+                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
         for product in config["products"].itervalues():
             if product['id'] in self.__controller:

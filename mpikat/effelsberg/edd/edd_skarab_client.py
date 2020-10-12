@@ -318,7 +318,7 @@ if __name__ == "__main__":
     parser.add_argument('--set-quantization', dest='quantization',
         help='Sets quanization factor')
 
-    parser.add_argument('--set-fftshift', dest='fftshift', type=int,
+    parser.add_argument('--set-fftshift', dest='fftshift',
         help='Sets fft shift')
 
     parser.add_argument('--program', action="store_true", default=False, help="Programs he FPGA with the given firmware")
@@ -352,7 +352,12 @@ if __name__ == "__main__":
             v = int(args.quantization)
         actions.append((client.configure_quantization_factor, dict(quant_factor=v)))
     if args.fftshift:
-        actions.append((client.configure_fft_shift, dict(fft_shift=args.fftshift)))
+        if args.fftshift.startswith("0x"):
+            v = int(args.fftshift, 16)
+        else:
+            v = int(args.fftshift)
+
+        actions.append((client.configure_fft_shift, dict(fft_shift=v)))
 
     if args.program or args.outputs or args.inputs:
         actions.append((client.capture_start, {}))

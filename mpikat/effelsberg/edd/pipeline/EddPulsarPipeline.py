@@ -790,7 +790,7 @@ class EddPulsarPipeline(EDDPipeline):
         for k in self._dada_buffers:
             cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
-            yield command_watcher(cmd)
+            yield command_watcher(cmd, allow_fail=True)
 
 
     @request(Str())

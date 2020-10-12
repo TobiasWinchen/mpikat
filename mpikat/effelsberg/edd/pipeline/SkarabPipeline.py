@@ -75,11 +75,11 @@ DEFAULT_CONFIG = {
         "log_level": "debug",
         "force_program": False,                 # Force reprogramming of with new firmware version
         "firmware_directory": os.path.join(os.path.dirname(os.path.realpath(__file__)), "skarab_firmware"),
-        "firmware": "s_ubb_64ch_codd_2020-07-31_1348.fpg",
+        "firmware": "s_ubb_64ch_coddh_2020-09-21_1540.fpg",
         "channels_per_group": 8,                # Channels per multicast group in the fpga output
         "board_id": 23,                         # Id to add to the spead headers of the FPGA output
-        "initial_quantization_factor": 0x012C0000 ,       # initial value for the quantization factor. Can be changed per measurement
-        "initial_fft_shift": 127,                 # initial value for the fft shift. Can be changed per measurement
+        "initial_quantization_factor": 0xff,       # initial value for the quantization factor. Can be changed per measurement
+        "initial_fft_shift": 0xff,                 # initial value for the fft shift. Can be changed per measurement
 
     }
 
@@ -140,8 +140,10 @@ class SkarabPipeline(EDDPipeline):
             log.debug("Stripping outputs from cfg before check")
             # Do not check output data streams, as the only relevant thing is here
             # that they are consecutive
-            outputs = cfg.pop['output_data_streams']
+            outputs = cfg.pop('output_data_streams')
+            log.debug("Pipeline set")
             EDDPipeline.set(self, cfg)
+            log.debug("Re-adding outputs")
             self._config['output_data_streams'] = outputs
         else:
             EDDPipeline.set(self, cfg)
