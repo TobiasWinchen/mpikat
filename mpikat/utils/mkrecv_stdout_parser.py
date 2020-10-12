@@ -1,18 +1,21 @@
 from katcp import Sensor
 import logging
+import re
 
 log = logging.getLogger('mpikat.mkrecv_stdout_parser')
 
-MKRECV_STDOUT_KEYS = { "STAT": [("slot-size", int), ("heaps-completed", int),
-             ("heaps-discarded", int), ("heaps-needed", int),
+MKRECV_STDOUT_KEYS = { "STAT": [("slot-nr", int), ("slot-nheaps", int), ("stc", int),
+             ("heaps-completed", int),
+             ("heaps-discarded", int), ("heaps-open", int),
              ("payload-expected", int), ("payload-received", int),
              ("global-heaps-completed", int),
-             ("global-heaps-discarded", int), ("global-heaps-needed", int),
+             ("global-heaps-discarded", int), ("global-heaps-open", int),
              ("global-payload-expected", int), ("global-payload-received", int)]
 }
 
 def mkrecv_stdout_parser(line):
     log.debug(line)
+
     line = line.replace('slot', '')
     line = line.replace('total', '')
 
