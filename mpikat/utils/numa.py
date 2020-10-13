@@ -4,7 +4,9 @@ import os
 import socket
 import fcntl
 import struct
-import pynvml
+
+import mpikat.utils.pynvml as pynvml
+
 import logging
 __numaInfo = None
 
