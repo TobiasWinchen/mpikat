@@ -61,7 +61,7 @@ class CoreManager(object):
     def get_cores(self, taskname):
         if self.__new_task:
             self.__finalize_cores()
-        return self.__tasks[taskname]['reserved_cores']
+        return ",".join(self.__tasks[taskname]['reserved_cores'])
 
 
 if __name__ == "__main__":
