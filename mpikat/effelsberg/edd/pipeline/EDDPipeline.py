@@ -30,7 +30,7 @@ from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Int, Str
 
 import tornado
-from tornado.gen import coroutine, Return
+from tornado.gen import coroutine, Return, with_timeout, sleep
 
 import os
 import datetime
@@ -700,7 +700,7 @@ class EDDPipeline(AsyncDeviceServer):
         pass
 
 
-def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, intermediate=None, error='error'):
+def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, intermediate=None, error='error', timeout=120):
     """
     @brief decorator to perform a state change in a method
 
@@ -708,17 +708,31 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, intermediate=None,
     @param       allowed: Allowed source states
     @param  intermediate: Intermediate state to assume while executing
     @param         error: State to go assume on error
+    @param       waitfor: Wait with the state changes until the current state set
+    @param       timeout: If state change is not completed after [timeout] seconds, error state is assumed. Timeout can be None to wait indefinitely
     """
     def decorator_state_change(func):
         @functools.wraps(func)
         @coroutine
         def wrapper(self, *args, **kwargs):
+            log.debug("Decorator managed state change {} -> {}".format(self.state, target))
             if self.state not in allowed:
                 raise FailReply("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
+            if waitfor:
+                waiting_since = 0
+                while (self.state != waitfor):
+                    log.warning("Waiting since {}s for state {} to start state change to {}, current state {}. Timeout: {}s".format(waiting_since, waitfor, target, self.state, timeout))
+                    if waiting_since > timeout:
+                        raise RuntimeError("Waiting since {}s to assume state {} in preparation to change to {}. Aborting.".format(waiting_since, waitfor, target))
+                    yield sleep(1)
+                    waiting_since += 1
             if intermediate:
                 self.state = intermediate
             try:
-                yield func(self, *args, **kwargs)
+                if timeout:
+                    yield with_timeout(datetime.timedelta(seconds=timeout), func(self, *args, **kwargs))
+                else:
+                    yield func(self, *args, **kwargs)
             except Exception as E:
                 self.state = error
                 raise E

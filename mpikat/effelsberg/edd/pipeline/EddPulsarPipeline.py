@@ -481,7 +481,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug('Received capture start, doing nothing.')
 
 
-    @state_change(target="set", allowed=["ready"], intermediate="measurement_preparing")
+    @state_change(target="set", allowed=["ready", "measurement_starting"], intermediate="measurement_preparing")
     @coroutine
     def measurement_prepare(self, config_json):
         self._subprocessMonitor = SubprocessMonitor()
@@ -652,7 +652,7 @@ class EddPulsarPipeline(EDDPipeline):
                     attempts += 1
 
 
-    @state_change(target="measuring", allowed=["set"], intermediate="measurement_starting")
+    @state_change(target="measuring", allowed=["set", "ready", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
     @coroutine
     def measurement_start(self):
         ####################################################
@@ -784,7 +784,6 @@ class EddPulsarPipeline(EDDPipeline):
     @coroutine
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-        #log.info("Deconfiguring pipeline")
         log.debug("Destroying dada buffers")
 
         for k in self._dada_buffers:
