@@ -189,6 +189,22 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             req.error(em)
         req.ok()
 
+    @scpi_request(str)
+    def request_edd_measurementprepare(self, req, message):
+        """
+        Sends a raw measurement prepare json to the master controller. Note that \ and " have to be escaped. To send a json dict with two strings {"foo":"bar"} you thus have to send the command EDD:MEASUREMENTPREPARE {\\\"foo\\\":\\\"bar\\\"}'
+        """
+
+        log.debug("Sending measurement prepare: {}".format(message))
+        try:
+            cfg = json.loads(message)
+        except:
+            em = "Not valid json!:\n {}".format(message)
+            log.error(em)
+            req.error(em)
+
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_prepare, cfg))
+
 
 
 
