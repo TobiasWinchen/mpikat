@@ -48,7 +48,7 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 
 def updateConfig(oldo, new):
     """
-    @breif Merge retrieved config [new] into [old] via recursive dict merge
+    @brief Merge retrieved config [new] into [old] via recursive dict merge
     """
     old = oldo.copy()
     for k in new:
@@ -707,7 +707,7 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, inte
     @param        target: target state
     @param       allowed: Allowed source states
     @param  intermediate: Intermediate state to assume while executing
-    @param         error: State to go assume on error
+    @param         error: State to assume on error
     @param       waitfor: Wait with the state changes until the current state set
     @param       timeout: If state change is not completed after [timeout] seconds, error state is assumed. Timeout can be None to wait indefinitely
     """
