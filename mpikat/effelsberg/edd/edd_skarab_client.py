@@ -190,7 +190,7 @@ class SkarabChannelizerClient(SkarabInterface):
 
 
     @coroutine
-    def configure_output(self, dest_ip, dest_port, number_of_groups=8, channels_per_group=8, board_id=07):
+    def configure_output(self, dest_ip, dest_port, number_of_groups=8, channels_per_group=8, board_id=0x07):
         """
         @brief      Configur skarab output
 

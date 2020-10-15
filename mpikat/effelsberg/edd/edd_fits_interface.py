@@ -372,9 +372,9 @@ class SpeadCapture(Thread):
         """
         log.debug("Subscribe to multicast groups:")
         for i, mg in enumerate(self._mc_ip):
-            log.debug(" - Subs {}: ip: {}, port: {}".format(i,self._mc_ip[i], self._mc_port ))
-            self.stream.add_udp_reader(mg, int(self._mc_port), max_size = 9200L,
-                buffer_size= 1073741820L, interface_address=self._capture_ip)
+            log.debug(" - Subs {}: ip: {}, port: {}".format(i,self._mc_ip[i], self._mc_port))
+            self.stream.add_udp_reader(mg, int(self._mc_port), max_size=9200,
+                buffer_size=1073741820, interface_address=self._capture_ip)
 
         log.debug("Start processing heaps:")
         self._nheaps = 0
