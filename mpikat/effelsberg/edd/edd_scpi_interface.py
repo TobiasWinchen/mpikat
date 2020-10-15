@@ -206,6 +206,14 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_prepare, cfg))
 
 
+    @scpi_request(float, float)
+    def request_edd_setnoisediodepattern(self, req, percentage, period):
+
+        log.debug("Sending noise diode fireing pattern: percentage={}, period={}".format(percentage, period))
+        cfg = {"set_noise_diode_firing_pattern": {"percentage":percentage, "period":period}}
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_prepare, cfg))
+
+
 
 
 if __name__ == "__main__":
