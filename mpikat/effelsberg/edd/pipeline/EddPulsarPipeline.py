@@ -233,7 +233,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
-                sleep(1)
+                yield sleep(1)
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
@@ -605,7 +605,7 @@ class EddPulsarPipeline(EDDPipeline):
                         error = "could not read t2pred.dat"
                         raise EddPulsarPipelineError(error)
                     else:
-                        sleep(1)
+                        yield sleep(1)
                         if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
                             log.debug('found {}/t2pred.dat'.format(os.getcwd()))
                             break
@@ -644,7 +644,7 @@ class EddPulsarPipeline(EDDPipeline):
                 error = "could not read dada_key_file"
                 raise EddPulsarPipelineError(error)
             else:
-                sleep(1)
+                yield sleep(1)
                 if is_accessible('{}'.format(self.dada_key_file.name)):
                     log.debug('found {}'.format(self.dada_key_file.name))
                     break
