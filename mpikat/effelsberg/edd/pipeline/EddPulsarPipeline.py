@@ -234,7 +234,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
-                sleep(1)
+                yield sleep(1)
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
@@ -482,7 +482,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug('Received capture start, doing nothing.')
 
 
-    @state_change(target="set", allowed=["ready"], intermediate="measurement_preparing")
+    @state_change(target="set", allowed=["ready", "measurement_starting"], intermediate="measurement_preparing")
     @coroutine
     def measurement_prepare(self, config_json):
         self._subprocessMonitor = SubprocessMonitor()
@@ -613,7 +613,7 @@ class EddPulsarPipeline(EDDPipeline):
                         error = "could not read t2pred.dat"
                         raise EddPulsarPipelineError(error)
                     else:
-                        sleep(1)
+                        yield sleep(1)
                         if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
                             log.debug('found {}/t2pred.dat'.format(os.getcwd()))
                             break
@@ -652,7 +652,7 @@ class EddPulsarPipeline(EDDPipeline):
                 error = "could not read dada_key_file"
                 raise EddPulsarPipelineError(error)
             else:
-                sleep(1)
+                yield sleep(1)
                 if is_accessible('{}'.format(self.dada_key_file.name)):
                     log.debug('found {}'.format(self.dada_key_file.name))
                     break
@@ -660,7 +660,7 @@ class EddPulsarPipeline(EDDPipeline):
                     attempts += 1
 
 
-    @state_change(target="measuring", allowed=["set"], intermediate="measurement_starting")
+    @state_change(target="measuring", allowed=["set", "ready", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
     @coroutine
     def measurement_start(self):
         ####################################################
