@@ -1,3 +1,4 @@
+from __future__ import print_function
 import redis
 import json
 import logging
@@ -160,4 +161,4 @@ class EDDDataStore:
 if __name__ == "__main__":
     store = EDDDataStore("localhost")
     store.setTelescopeDataItem("foo", "bar")
-    print (store.getTelescopeDataItem("foo"))
+    print(store.getTelescopeDataItem("foo"))

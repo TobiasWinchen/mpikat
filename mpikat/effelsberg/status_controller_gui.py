@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import warnings
 import Tkinter as tk
 from optparse import OptionParser
@@ -125,7 +127,7 @@ class SensorParameterController(ParameterController):
             yield self.client.until_synced()
             response = yield self.client.req.sensor_value(self.key)
             if not response.reply.reply_ok():
-                print "Error: {0}".format(str(response.messages))
+                print("Error: {0}".format(str(response.messages)))
             self.set(response.informs[0].arguments[-1])
         if not self.controlled.get():
             self.ioloop.add_callback(_get)
@@ -138,7 +140,7 @@ class SensorParameterController(ParameterController):
         if tog[0]:
             response = yield self.client.req.sensor_control(self.key)
             if not response.reply.reply_ok():
-                print "Error: {0}".format(str(response.messages))
+                print("Error: {0}".format(str(response.messages)))
             else:
                 self._cont.configure(text='Release', highlightbackground="red")
                 self._set.configure(state=tk.NORMAL)
@@ -147,7 +149,7 @@ class SensorParameterController(ParameterController):
         else:
             response = yield self.client.req.sensor_release(self.key)
             if not response.reply.reply_ok():
-                print "Error: {0}".format(str(response.messages))
+                print("Error: {0}".format(str(response.messages)))
             self._cont.configure(text='Control', highlightbackground="green")
             self._set.configure(state=tk.DISABLED)
             self._entry.configure(state=tk.DISABLED)
@@ -158,7 +160,7 @@ class SensorParameterController(ParameterController):
         def _set():
             response = yield self.client.req.sensor_set(self.key, str(self.get()))
             if not response.reply.reply_ok():
-                print "Error: {0}".format(str(response.messages))
+                print("Error: {0}".format(str(response.messages)))
         if self.controlled.get():
             self.ioloop.add_callback(_set)
 
