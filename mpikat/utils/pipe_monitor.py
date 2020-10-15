@@ -1,3 +1,4 @@
+from __future__ import print_function
 import logging
 import select
 from threading import Thread, Event
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     import subprocess
 
     def handler(line):
-        print line
+        print(line)
 
     proc = subprocess.Popen("echo Foo && sleep 2 && echo bar", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
     pm = PipeMonitor(proc.stdout, handler)
