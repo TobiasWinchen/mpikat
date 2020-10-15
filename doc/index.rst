@@ -10,14 +10,6 @@ Welcome to mpikat's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-.. automodule:: mpikat
-    :members:
-
-.. automodule:: effelsberg
-    :members:
-
-.. automodule:: mpikat.utils
-    :members:
 
 Indices and tables
 ==================
