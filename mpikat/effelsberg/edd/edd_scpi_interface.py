@@ -38,6 +38,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self._scannum_callback = tornado.ioloop.PeriodicCallback(self.__check_scannum, scannum_check_period)
         self._scannum_callback.start()
         self._last_scannum = None
+        self.__legacypulsarmode = False
 
 
     @coroutine
@@ -50,11 +51,15 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             log.debug("First retrival of scannumbner, got {}".format(current_scan_number))
             self._last_scannum = current_scan_number
         elif self._last_scannum == current_scan_number:
-            log.debug("Checking scan number {} == {}, doing nothing.".format(current_scan_number, self._last_scannum))
+            #log.debug("Checking scan number {} == {}, doing nothing.".format(current_scan_number, self._last_scannum))
             pass
         else:
             log.debug("Scan number change detected from {} -> {}".format(self._last_scannum, current_scan_number))
             self._last_scannum = current_scan_number
+
+            if not self.__legacypulsarmode:
+                log.debug("Legacy pulsar mode disbaled. Not reacting on scannumber change!")
+                return
 
             sourcename = self.__eddDataStore.getTelescopeDataItem("source-name")
             if sourcename.endswith("_R"):
@@ -169,6 +174,22 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
     @scpi_request()
     def request_edd_deprovision(self, req):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.deprovision))
+
+
+    @scpi_request(str)
+    def request_edd_legacypulsarmode(self, req, message):
+        log.debug("Setting pulsar mode")
+        if message.upper() in ['ON', 'TRUE', 'ENABLED']:
+            self.__legacypulsarmode = True
+        elif message.upper() in ['OFF', 'FALSE', 'DISABLED']:
+            self.__legacypulsarmode = False
+        else:
+            em = "Error setting {} - expecting ON or OFF.".format(message)
+            log.error(em)
+            req.error(em)
+        req.ok()
+
+
 
 
 if __name__ == "__main__":
