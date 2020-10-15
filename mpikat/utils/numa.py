@@ -1,8 +1,12 @@
+from __future__ import print_function, division, unicode_literals
+
 import os
 import socket
 import fcntl
 import struct
-import pynvml
+
+import mpikat.utils.pynvml as pynvml
+
 import logging
 __numaInfo = None
 
@@ -55,11 +59,14 @@ def updateInfo():
         cpulist = expandlistrange(open('/sys/devices/system/node/node' + node + '/cpulist').read())
 
         __numaInfo[node]['cores'] = list(cpulist.difference(isolated_cpus))
+        __numaInfo[node]['cores'].sort()
         __numaInfo[node]['isolated_cores'] = list(isolated_cpus.intersection(cpulist))
+        __numaInfo[node]['isolated_cores'].sort()
 
         __numaInfo[node]['gpus'] = []
         __numaInfo[node]["net_devices"] = {}
         logging.debug("  found {} Cores.".format(len(__numaInfo[node]['cores'])))
+    logging.debug("Available nodes: {}".format(__numaInfo.keys()))
 
     logging.debug(__numaInfo)
     # check network devices
@@ -79,7 +86,7 @@ def updateInfo():
             try:
                 ip = socket.inet_ntoa(fcntl.ioctl(s.fileno(),
                     0x8915,  # SIOCGIFADDR
-                    struct.pack('256s', device[:15]))[20:24])
+                    struct.pack('256s', device[:15].encode('ascii')))[20:24])
                 __numaInfo[node]["net_devices"][device]['ip'] = ip
             except IOError as e:
                 logging.warning(" Cannot associate device {} to a node: {}".format(device, e))
@@ -146,7 +153,7 @@ def getFastestNic(numa_node=None):
 
 if __name__ == "__main__":
     logging.basicConfig(level="DEBUG")
-    print getInfo()
+    print(getInfo())
     for node, res in getInfo().items():
         print("NUMA Node: {}".format(node))
         print("  CPU Cores: {}".format(", ".join(res['cores'])))

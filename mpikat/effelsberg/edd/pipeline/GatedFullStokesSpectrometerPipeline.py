@@ -26,7 +26,11 @@ from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
+
 import mpikat.utils.numa as numa
+import mpikat.utils.numa as numa
+from mpikat.utils.core_manager import CoreManager
+from mpikat.utils.ip_utils import ipstring_to_list
 
 from tornado.gen import coroutine
 from katcp import Sensor, AsyncReply, FailReply
@@ -61,7 +65,7 @@ DEFAULT_CONFIG = {
                 "source": "",                               # name of the source for automatic setting of paramters
                 "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
-                "ip": "225.0.0.152+3",
+                "ip": "225.0.1.152+3",
                 "port": "7148",
                 "bit_depth" : 12,
                 "sample_rate" : 2600000000,
@@ -73,7 +77,7 @@ DEFAULT_CONFIG = {
                 "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
                 "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",
-                "ip": "225.0.0.156+3",
+                "ip": "225.0.1.156+3",
                 "port": "7148",
                 "bit_depth" : 12,
                 "sample_rate" : 2600000000,
@@ -247,7 +251,6 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
     def __init__(self, ip, port):
         """@brief initialize the pipeline."""
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
-        self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []
         self.__dada_key = "dada"  # key of inpt buffer, output is inverse
@@ -377,7 +380,6 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             raise FailReply("Require 2 polarization input, got {}".format(len(self._config['input_data_streams'])))
 
         log.debug("Merging ip ranges")
-        input_ips = []
         self.stream_description = self._config['input_data_streams'].items()[0][1]
         self.stream_description["ip"] += ",{}".format(self._config['input_data_streams'].items()[1][1]["ip"])
         log.debug("Merged ip ranges: {}".format(self.stream_description["ip"]))
@@ -422,10 +424,19 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         # we write nSlice blocks on each go
         yield self._create_ring_buffer(output_bufferSize, 8 * nSlices, ofname, numa_node)
 
-        # Configure + launch 
-        physcpu = numa.getInfo()[numa_node]['cores'][0]
+        ## specify all subprocesses
+        self.__coreManager = CoreManager(numa_node)
+        self.__coreManager.add_task("gated_spectrometer", 1)
 
-        cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_format=Stokes  --input_polarizations=Dual --output_type=dada".format(dada_key=self.__dada_key, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, bit_depth=self.stream_description['bit_depth'], **self._config)
+        N_inputips = 0
+        for p in self.stream_description["ip"].split(','):
+            N_inputips+= len(ipstring_to_list(p))
+        log.debug("Found {} input ips".format(N_inputips))
+        self.__coreManager.add_task("mkrecv", N_inputips + 1, prefere_isolated=True)
+        self.__coreManager.add_task("mksend", 2, prefere_isolated=True)
+
+        # Configure + launch 
+        cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_format=Stokes  --input_polarizations=Dual --output_type=dada".format(dada_key=self.__dada_key, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, bit_depth=self.stream_description['bit_depth'], physcpu=self.__coreManager.get_cores('gated_spectrometer'), **self._config)
         log.debug("Command to run: {}".format(cmd))
 
         cudaDevice = numa.getInfo()[numa_node]['gpus'][0]
@@ -454,14 +465,13 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             nhops = len(ip_range)
 
             timestep = cfg["fft_length"] * cfg["naccumulate"]
-            physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
             #select network interface
             fastest_nic, nic_params = numa.getFastestNic(numa_node)
             heap_id_start = 0 #2 * i    # two output spectra per pol
 
             log.info("Sending data on NIC {} [ {} ] @ {} Mbit/s".format(fastest_nic, nic_params['ip'], nic_params['speed']))
             cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=heap_id_start , timestep=timestep,
-                        ofname=ofname, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
+                        ofname=ofname, nChannels=nChannels, physcpu=self.__coreManager.get_cores('mksend'), integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nic_params['ip'],
                         mcast_dest=" ".join(ip_range),
                         port_tx=port.pop(), **cfg)
@@ -516,7 +526,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
                 numa_node = self.__numa_node_pool[0]
                 fastest_nic, nic_params = numa.getFastestNic(numa_node)
                 log.info("Receiving data on NIC {} [ {} ] @ {} Mbit/s".format(fastest_nic, nic_params['ip'], nic_params['speed']))
-                physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
+
                 if self._config['idx1_modulo'] == 'auto': # Align along output ranges
                     idx1modulo = self._config['fft_length'] * self._config['naccumulate'] / self.stream_description['samples_per_heap']
                 else:
@@ -524,7 +534,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
                 cmd = "taskset -c {physcpu} mkrecv_v4 --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
                 --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
-                --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1modulo=idx1modulo,
+                --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=self.__coreManager.get_cores('mkrecv'), ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1modulo=idx1modulo,
                         **cfg )
                 mk = ManagedProcess(cmd, stdout_handler=self._mkrecv_sensors.stdout_handler)
             else:

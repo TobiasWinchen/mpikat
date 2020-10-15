@@ -22,6 +22,7 @@ SOFTWARE.
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 import mpikat.utils.numa as numa
+from mpikat.utils.core_manager import CoreManager
 
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
@@ -268,17 +269,7 @@ class EddPulsarPipeline(EDDPipeline):
         # Pick first available numa node. Disable non-available nodes via
         # EDD_ALLOWED_NUMA_NODES environment variable
         self.numa_number = numa.getInfo().keys()[0]
-        self.__core_sets = {'mkrecv': ["0-3"], 'single': ["10"], 'dspsr': "11,12,13,14"}
-        if len(numa.getInfo()[self.numa_number]['isolated_cores']) >= 4:
-            self.__core_sets['mkrecv'] = numa.getInfo()[self.numa_number]['isolated_cores'][:4]
-        else:
-            self.__core_sets['mkrecv'] = numa.getInfo()[self.numa_number]['cores'][:4]
-        self.__core_sets['single'] = numa.getInfo()[self.numa_number]['cores'][5]
-        self.__core_sets['dspsr'] = numa.getInfo()[self.numa_number]['cores'][6:10]
 
-        log.debug("Subprocess core settings:")
-        for k,v in self.__core_sets.items():
-            log.debug(" - {}: {}".format(k, ",".join(v)))
 
     def setup_sensors(self):
         """
@@ -459,6 +450,11 @@ class EddPulsarPipeline(EDDPipeline):
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
+        self.__coreManager = CoreManager(self.numa_number)
+        self.__coreManager.add_task("mkrecv", 4, prefere_isolated=True)
+        self.__coreManager.add_task("single", 1)
+        self.__coreManager.add_task("dspsr", 4)
+
         # The master contoller provides the data store IP as default gloal
         # config to all pipelines
         self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
@@ -600,7 +596,7 @@ class EddPulsarPipeline(EDDPipeline):
             log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
             if (parse_tag(self._source_name) == "default") & is_accessible(epta_file):
                 cmd = 'numactl -m {} taskset -c {} tempo2 -f {} -pred'.format(
-                    self.numa_number, self.__core_sets['single'],
+                    self.numa_number, self.__coreManager.get_cores('single'),
                     epta_file).split()
 
                 cmd.append("{} {} {} {} {} 24 2 3599.999999999".format(self._config["tempo2_telescope_name"], Time.now().mjd - 1, Time.now().mjd + 1, float(central_freq) - 200, float(central_freq) + 200))
@@ -681,7 +677,7 @@ class EddPulsarPipeline(EDDPipeline):
                         name=self._source_name,
                         predictor="/tmp/t2pred.dat",
                         parfile=epta_file,
-                        cpus=",".join(self.__core_sets['dspsr']),
+                        cpus=self.__coreManager.get_cores('dspsr'),
                         cuda_number=self.cuda_number,
                         keyfile=self.dada_key_file.name)
 
@@ -691,7 +687,7 @@ class EddPulsarPipeline(EDDPipeline):
                         args=self._config["dspsr_params"]["args"],
                         nchan="-F {}:D".format(self._config["nchannels"]),
                         name=self._source_name,
-                        cpus=",".join(self.__core_sets['dspsr']),
+                        cpus=self.__coreManager.get_cores('dspsr'),
                         cuda_number=self.cuda_number,
                         keyfile=self.dada_key_file.name)
             else:
@@ -711,7 +707,7 @@ class EddPulsarPipeline(EDDPipeline):
                 nchan=self._filterbank_nchannels,
                 decimation=self._decimation,
                 name=self._source_name,
-                cpus=",".join(self.__core_sets['dspsr']),
+                cpus=self.__coreManager.get_cores('dspsr'),
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
         if self._config["mode"] == "Baseband":
@@ -733,7 +729,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING EDDPolnMerge                             #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-            numa=self.numa_number, cpu=self.__core_sets['single'], merge_application=self._config["merge_application"], npart=self._config["npart"])
+            numa=self.numa_number, cpu=self.__coreManager.get_cores('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
@@ -744,7 +740,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING MKRECV                                   #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --quiet".format(
-            numa=self.numa_number, cpu=",".join(self.__core_sets['mkrecv']), dada_header=self.dada_header_file.name)
+            numa=self.numa_number, cpu=self.__coreManager.get_cores('mkrecv'), dada_header=self.dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ManagedProcess(cmd)
