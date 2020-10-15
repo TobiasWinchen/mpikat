@@ -12,7 +12,7 @@
 # -e NVIDIA_VISIBLE_DEVICES which GPUs will be made accessible inside the container;
 # -v maps the host directory with the directory inside container, if the directories do not exist, docker will create them;
 # Detail on how to setup nvidia docker image can be found at https://github.com/NVIDIA/nvidia-container-runtime;
-
+from __future__ import print_function
 import os, argparse
 
 # Read in command line arguments
@@ -36,14 +36,14 @@ if(numa == 0):
     cpuset_cpus = "0-9"
 if(numa == 1):
     cpuset_cpus = "10-19"
-    
+
 if root:
     #comline = "docker run --privileged --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/rdma_cm -e DISPLAY --net=host -v {:s} -v {:s} -v /tmp:/tmp -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
     comline = "docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --net=host -v {:s} -v {:s} -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
-else:    
+else:
     comline = "docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/rdma_cm -e DISPLAY --net=host -v {:s} -v {:s} -v /tmp:/tmp -u 50000:50000 -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
 
-print comline
-print "\nYou are going to a docker container with the name {:s}.{:d}!\n".format(image, numa)
+print(comline)
+print("\nYou are going to a docker container with the name {:s}.{:d}!\n".format(image, numa))
 
 os.system(comline)

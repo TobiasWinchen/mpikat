@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import logging
 import sys
 import traceback
@@ -154,7 +155,7 @@ class KatcpCli(Cmd):
         try:
             host,port = arg.split(":")
         except Exception:
-            print "Usage: connect <host>:<port>"
+            print("Usage: connect <host>:<port>")
             return
         try:
             app = KatcpCli(host,port)

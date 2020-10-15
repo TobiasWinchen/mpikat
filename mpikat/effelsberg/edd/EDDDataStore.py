@@ -1,3 +1,4 @@
+from __future__ import print_function
 import redis
 import json
 import logging
@@ -218,8 +219,4 @@ if __name__ == "__main__":
             print(" {}: {}".format(k, v))
             cfg[k] = v
         dataStore.updateProduct(cfg)
-
-
-
-
 
