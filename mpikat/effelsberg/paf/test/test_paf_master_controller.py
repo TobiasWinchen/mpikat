@@ -115,11 +115,11 @@ class TestPafMasterController(AsyncServerTester):
             }
         yield self._send_request_expect_ok('set-control-mode', 'KATCP')
         yield self._send_request_expect_fail('configure', json.dumps(config))
-
-if __name__ == '__main__':
-    #logger = logging.getLogger('scpi')
-    #coloredlogs.install(
-    #    fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-    #    level=opts.log_level.upper(),
-    #    logger=logger)
-
+#
+#if __name__ == '__main__':
+#    #logger = logging.getLogger('scpi')
+#    #coloredlogs.install(
+#    #    fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+#    #    level=opts.log_level.upper(),
+#    #    logger=logger)
+#
