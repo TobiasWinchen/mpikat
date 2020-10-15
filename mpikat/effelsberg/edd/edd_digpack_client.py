@@ -147,7 +147,7 @@ class DigitiserPacketiserClient(object):
         try:
             args = self._sampling_modes[int(rate)]
         except KeyError as error:
-            pos_freqs = "\n".join(["  - {} Hz ".format(f) for f in self._sampling_modes.iterkeys()])
+            pos_freqs = "\n".join(["  - {} Hz ".format(f) for f in self._sampling_modes.keys()])
             error_msg = "Frequency {} Hz not in possible frequencies:\n{}".format(rate, pos_freqs)
             log.error(error_msg)
             raise DigitiserPacketiserError(error_msg)
@@ -413,9 +413,9 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Configures edd digitiezer. By default, send syncronize and capture start along with the given options.")
     parser.add_argument('host', type=str,
         help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(known_packetizers)))
-    parser.add_argument('-p', '--port', dest='port', type=long,
+    parser.add_argument('-p', '--port', dest='port', type=int,
         help='Port number to bind to', default=7147)
-    parser.add_argument('--nbits', dest='nbits', type=long,
+    parser.add_argument('--nbits', dest='nbits', type=int,
         help='The number of bits per output sample')
     parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)')

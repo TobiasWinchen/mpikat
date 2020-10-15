@@ -129,7 +129,7 @@ class KatcpCli(Cmd):
         try:
             msg = self.katcp_parser.parse(request)
             self.client.ioloop.add_callback(self.client.send_message, msg)
-        except Exception, e:
+        except Exception as e:
             e_type, e_value, trace = sys.exc_info()
             reason = "\n".join(traceback.format_exception(
                 e_type, e_value, trace, 20))

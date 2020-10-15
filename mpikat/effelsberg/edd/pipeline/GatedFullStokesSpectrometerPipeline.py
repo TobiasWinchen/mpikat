@@ -266,7 +266,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
         self._mkrecv_sensors = MkrecvSensors("")
 
-        for s in self._mkrecv_sensors.sensors.itervalues():
+        for s in self._mkrecv_sensors.sensors.values():
             self.add_sensor(s)
 
         self._input_buffer_fill_level = Sensor.float(

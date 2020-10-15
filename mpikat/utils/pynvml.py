@@ -291,7 +291,7 @@ def _extractNVMLErrorsAsClasses():
     e.g. NVML_ERROR_ALREADY_INITIALIZED will be turned into NVMLError_AlreadyInitialized
     '''
     this_module = sys.modules[__name__]
-    nvmlErrorsNames = filter(lambda x: x.startswith("NVML_ERROR_"), dir(this_module))
+    nvmlErrorsNames = [x for x in dir(this_module) if x.startswith("NVML_ERROR_")] 
     for err_name in nvmlErrorsNames:
         # e.g. Turn NVML_ERROR_ALREADY_INITIALIZED into NVMLError_AlreadyInitialized
         class_name = "NVMLError_" + string.capwords(err_name.replace("NVML_ERROR_", ""), "_").replace("_", "")
