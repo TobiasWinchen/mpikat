@@ -17,7 +17,7 @@ import spead2.recv
 from katcp import Sensor, ProtocolFlags
 from katcp.kattypes import (request, return_reply)
 
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, state_change
 import mpikat.utils.numa as numa
 
 log = logging.getLogger("mpikat.edd_fits_interface")
