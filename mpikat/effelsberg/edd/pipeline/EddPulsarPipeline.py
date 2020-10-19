@@ -545,7 +545,7 @@ class EddPulsarPipeline(EDDPipeline):
             'input_data_streams'][0]["port"]
         log.debug("  - mc streaming port: {}".format(header['mc_streaming_port']))
         header["interface"] = numa.getFastestNic(self.numa_number)[1]['ip']
-        log.debug("  - mc interface: {}".format(header['mc_interface']))
+        log.debug("  - mc interface: {}".format(header['interface']))
         header["sync_time"] = self.sync_epoch
         log.debug("  - sync time: {}".format(header['sync_time']))
         header["sample_clock"] = float(self._config['input_data_streams'][0]["sample_rate"]) # adjsutment for the predecimation factor is done in the amster controller

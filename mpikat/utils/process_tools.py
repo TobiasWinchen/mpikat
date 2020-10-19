@@ -1,3 +1,4 @@
+from __future__ import print_function, unicode_literals, division
 import time
 import logging
 import os
@@ -64,7 +65,7 @@ def command_watcher(cmd, env={}, umask=0o000, **kwargs):
         os.umask(umask)
 
     log.debug("Executing command: {}".format(cmd))
-    if isinstance(cmd, str):
+    if isinstance(cmd, str) or isinstance(cmd, unicode):
         cmd = cmd.split()
 
     environ = os.environ.copy()
@@ -89,7 +90,7 @@ class ManagedProcess(object):
         @param stderr_handler Handler for ouptut written to stderr
         """
         # cmdlineargs to list of strings
-        if isinstance(cmdlineargs, str):
+        if isinstance(cmdlineargs, str) or isinstance(cmdlineargs, unicode):
             cmdlineargs = cmdlineargs.split()
         cmdlineargs = map(str, cmdlineargs)
         self._cmdl = " ".join(cmdlineargs)
