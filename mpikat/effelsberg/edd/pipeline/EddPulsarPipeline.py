@@ -1,4 +1,4 @@
-from __future__ import print_function, unicode_literals, division
+#from __future__ import print_function, unicode_literals, division
 
 """
 Copyright (c) 2019 Jason Wu <jwu@mpifr-bonn.mpg.de>
@@ -41,7 +41,7 @@ import tempfile
 import json
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler, LoggingEventHandler
 
 from astropy.time import Time
 import astropy.units as u
@@ -49,6 +49,8 @@ from astropy.coordinates import SkyCoord
 
 from katcp import Sensor
 from katcp.kattypes import request, return_reply, Int, Str
+
+import time
 
 import tornado
 from tornado.gen import coroutine, sleep
@@ -74,7 +76,7 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.110+3",
+            "ip": "225.0.0.180+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
@@ -88,7 +90,7 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.114+3",
+            "ip": "225.0.0.184+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
@@ -159,7 +161,7 @@ def parse_tag(source_name):
 class ArchiveAdder(FileSystemEventHandler):
     def __init__(self, output_dir):
         super(ArchiveAdder, self).__init__()
-        self.output_dir = output_dir
+        #self.output_dir = output_dir
         self.first_file = True
         self.freq_zap_list = ""
         self.time_zap_list = ""
@@ -237,7 +239,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
-                yield sleep(1)
+                time.sleep(1)
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
@@ -566,7 +568,7 @@ class EddPulsarPipeline(EDDPipeline):
                     "/mnt/dspsr_output/", tdate, self._source_name, str(central_freq), tstr, "combined_data")
                 log.debug("Creating directories")
                 log.debug("in path {}".format(self.in_path))
-                log.debug("in path {}".format(self.out_path))
+                log.debug("out path {}".format(self.out_path))
                 if not os.path.isdir(self.in_path):
                     os.makedirs(self.in_path)
                 if not os.path.isdir(self.out_path):
@@ -772,8 +774,7 @@ class EddPulsarPipeline(EDDPipeline):
             log.info("Output directory: {}".format(self.out_path))
             log.info("Setting up ArchiveAdder handler")
             self.handler = ArchiveAdder(self.out_path)
-            self.archive_observer.schedule(
-                self.handler, self.in_path, recursive=False)
+            self.archive_observer.schedule( self.handler, str(self.in_path), recursive=False)
             log.info("Starting directory monitor")
             self.archive_observer.start()
             self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
