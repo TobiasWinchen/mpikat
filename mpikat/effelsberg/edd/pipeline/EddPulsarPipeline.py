@@ -447,6 +447,13 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
         yield self.set(config_json)
+
+        if isinstance(self._config['input_data_streams'], dict):
+            log.warning("CHANGING INPUT DATA STREAM TYPE FROM DICT TO LIST - THIS IS A HACKY HACK AND BE DONE PROPERLY!")
+            l = [i for i in self._config['input_data_streams'].items()]
+            self._config['input_data_streams'] = l
+
+
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
