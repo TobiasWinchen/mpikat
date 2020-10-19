@@ -1,11 +1,12 @@
 image: edd01:5000/eddbase:latest
 
 before_script:
-  - apt-get install python-ipaddress
+  - apt-get install python-ipaddress python2-coverage
 
 execute_unit_tests:
   script:
-    - python -m unittest discover
+    - python2-coverage run  --omit */site-packages/* python -m unittest discover
+    - python2-coverage xml
   only:
     - pushes
     - merge_requests
