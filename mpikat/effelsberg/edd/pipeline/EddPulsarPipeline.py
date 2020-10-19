@@ -1,3 +1,5 @@
+from __future__ import print_function, unicode_literals, division
+
 """
 Copyright (c) 2019 Jason Wu <jwu@mpifr-bonn.mpg.de>
 
@@ -452,6 +454,7 @@ class EddPulsarPipeline(EDDPipeline):
             log.warning("CHANGING INPUT DATA STREAM TYPE FROM DICT TO LIST - THIS IS A HACKY HACK AND BE DONE PROPERLY!")
             l = [i for i in self._config['input_data_streams'].items()]
             self._config['input_data_streams'] = l
+            log.debug(self._config)
 
 
         cfs = json.dumps(self._config, indent=4)
