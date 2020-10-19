@@ -5,7 +5,7 @@ before_script:
 
 execute_unit_tests:
   script:
-    - ./test.py
+    - python -m unittest discover
   only:
     - pushes
     - merge_requests
