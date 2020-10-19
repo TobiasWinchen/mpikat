@@ -36,12 +36,12 @@ class Test_core_manager(unittest.TestCase):
     def test_non_ovverlap(self):
         self.cm.add_task('T1', len(numa.getInfo()['0']['cores']) // 2)
         self.cm.add_task('T2', len(numa.getInfo()['0']['cores']) // 2)
-        T1 = self.cm.get_cores('T1')
-        T2 = self.cm.get_cores('T2')
-        print("XXX", T1, type(T1))
-        self.assertEqual(len(T1), len(set(T1)), "Cores associated to task multiple times")
-        self.assertEqual(len(T2), len(set(T2)), "Cores associated to task multiple times")
-        self.assertEqual(len(T2 + T1), len(set(T2 + T1)), "Cores not unique")
+        T1 = self.cm.get_cores('T1').split(',')
+        T2 = self.cm.get_cores('T2').split(',')
+        #print("XXX", T1, type(T1))
+        self.assertEqual(len(T1), len(set(T1)), "Cores associated to task multiple times: {}".format(T1))
+        self.assertEqual(len(T2), len(set(T2)), "Cores associated to task multiple times: {}".format(T2))
+        self.assertEqual(len(T2 + T1), len(set(T2 + T1)), "Cores not unique: T1={}, T2={}".format(T1, T2))
 
 if __name__ == '__main__':
     unittest.main()
