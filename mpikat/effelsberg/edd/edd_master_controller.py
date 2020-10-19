@@ -517,6 +517,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         @brief   Deprovision EDD - stop all ansible containers launched in recent provision cycle.
         """
+        log.info("Deprovision request received")
         @coroutine
         def wrapper():
             try:
