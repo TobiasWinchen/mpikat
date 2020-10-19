@@ -490,8 +490,6 @@ class EddPulsarPipeline(EDDPipeline):
         subscannum = self.__eddDataStore.getTelescopeDataItem("subscannum")
         log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
 
-        
-
         if self._config["mode"] == "Timing":
             epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
             log.debug("Checking epta file {}".format(epta_file))
@@ -502,12 +500,12 @@ class EddPulsarPipeline(EDDPipeline):
                     raise EddPulsarPipelineError(error)
 
         self._timer = Time.now()
-        #Setting blank image
+        log.debug("Setting blank image")
         self._fscrunch.set_value(BLANK_IMAGE)
         self._tscrunch.set_value(BLANK_IMAGE)
         self._profile.set_value(BLANK_IMAGE)
 
-        #writing mkrecv header
+        log.debug("writing mkrecv header")
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
         c = SkyCoord("{} {}".format(ra, decl), unit=(u.deg, u.deg))
         header = self._config["dada_header_params"]
@@ -532,16 +530,14 @@ class EddPulsarPipeline(EDDPipeline):
             'input_data_streams'][0]["port"]
         header["interface"] = numa.getFastestNic(self.numa_number)[1]['ip']
         header["sync_time"] = self.sync_epoch
-        header["sample_clock"] = float(self._config['input_data_streams'][0][
-                                       "sample_rate"] / self._config['input_data_streams'][0]["predecimation_factor"])
+        header["sample_clock"] = float(self._config['input_data_streams'][0][ "sample_rate"] # adjsutment for the predecimation factor is done in the amster controller
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format(scannum, subscannum)
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
 
-        ####################################################
-        #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
-        ####################################################
+
+        log.debug("Setting up the input and scrunch data directories")
         if self._config["mode"] == "Timing":
             try:
                 self.in_path = os.path.join("/mnt/dspsr_output/",
@@ -560,7 +556,7 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("Current working directory: {}".format(os.getcwd()))
             except Exception as error:
                 raise EddPulsarPipelineError(str(error))
-        if self._config["mode"] == "Searching":
+        elif self._config["mode"] == "Searching":
             try:
                 self.in_path = os.path.join("/mnt/filterbank_output/",
                     tdate, self._source_name, str(central_freq), tstr)
@@ -573,7 +569,7 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("Current working directory: {}".format(os.getcwd()))
             except Exception as error:
                 raise EddPulsarPipelineError(str(error))
-        if self._config["mode"] == "Baseband":
+        elif self._config["mode"] == "Baseband":
             try:
                 self.in_path = os.path.join("/mnt/baseband_output/",
                     tdate, self._source_name, str(central_freq), tstr)
@@ -588,9 +584,7 @@ class EddPulsarPipeline(EDDPipeline):
                 raise EddPulsarPipelineError(str(error))
 
         os.chdir("/tmp/")
-        ####################################################
-        #CREATING THE PREDICTOR WITH TEMPO2                #
-        ####################################################
+        log.debug("Creating the predictor with tempo2")
         if self._config["mode"] == "Timing":
             self.pulsar_flag_with_R = is_accessible(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:-2])))
             log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
