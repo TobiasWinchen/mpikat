@@ -90,7 +90,7 @@ class ManagedProcess(object):
         @param stderr_handler Handler for ouptut written to stderr
         """
         # cmdlineargs to list of strings
-        if isinstance(cmd, str) or isinstance(cmd, unicode):
+        if isinstance(cmdlineargs, str) or isinstance(cmdlineargs, unicode):
             cmdlineargs = cmdlineargs.split()
         cmdlineargs = map(str, cmdlineargs)
         self._cmdl = " ".join(cmdlineargs)
