@@ -177,7 +177,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
 
     @scpi_request(str)
-    def request_edd_legacypulsarmode(self, req, message):
+    def request_edd_noisediodebysourcename(self, req, message):
         log.debug("Setting pulsar mode")
         if message.upper() in ['ON', 'TRUE', 'ENABLED']:
             self.__legacypulsarmode = True
