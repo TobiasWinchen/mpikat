@@ -507,7 +507,7 @@ class EddPulsarPipeline(EDDPipeline):
 
         log.debug("writing mkrecv header")
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
-        c = SkyCoord("{} {}".format(ra, decl), unit=(u.deg, u.deg))
+        log.debug("  - Running on cuda core: {}".format(self.cuda_number))
         header = self._config["dada_header_params"]
         central_freq = header["frequency_mhz"]
         self._central_freq.set_value(str(header["frequency_mhz"]))
@@ -515,11 +515,15 @@ class EddPulsarPipeline(EDDPipeline):
         self._nchannels.set_value(self._config["nchannels"])
         self._nbins.set_value(self._config["nbins"])
         header["telescope"] = self._config["tempo2_telescope_name"]
+        log.debug("  - Tempo2 telescope name: {}".format(header['telescope']))
+
+        c = SkyCoord("{} {}".format(ra, decl), unit=(u.deg, u.deg))
         header["ra"] = c.to_string("hmsdms").split(" ")[0].replace(
             "h", ":").replace("m", ":").replace("s", "")
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
             "d", ":").replace("m", ":").replace("s", "")
         header["key"] = self._dada_buffers[0]
+        log.debug("  - Dada key: {}".format(header['key']))
         if header["instrument"] == "SKARAB":
             header["mc_source"] = self._config['input_data_streams'][0][
             "ip"]
@@ -531,8 +535,10 @@ class EddPulsarPipeline(EDDPipeline):
         header["interface"] = numa.getFastestNic(self.numa_number)[1]['ip']
         header["sync_time"] = self.sync_epoch
         header["sample_clock"] = float(self._config['input_data_streams'][0][ "sample_rate"]) # adjsutment for the predecimation factor is done in the amster controller
+        log.debug("  - sample_clock: {}".format(header['sample_clock']))
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format(scannum, subscannum)
+        log.debug("  - obs_id: {}".format(header['obs_id']))
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
 
