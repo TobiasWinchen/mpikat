@@ -452,7 +452,7 @@ class EddPulsarPipeline(EDDPipeline):
 
         if isinstance(self._config['input_data_streams'], dict):
             log.warning("CHANGING INPUT DATA STREAM TYPE FROM DICT TO LIST - THIS IS A HACKY HACK AND BE DONE PROPERLY!")
-            l = [i for i in self._config['input_data_streams'].items()]
+            l = [i for i in self._config['input_data_streams'].values()]
             self._config['input_data_streams'] = l
             log.debug(self._config)
 
