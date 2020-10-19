@@ -38,6 +38,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self._scannum_callback = tornado.ioloop.PeriodicCallback(self.__check_scannum, scannum_check_period)
         self._scannum_callback.start()
         self._last_scannum = None
+        self.__legacypulsarmode = False
 
 
     @coroutine
@@ -50,11 +51,15 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             log.debug("First retrival of scannumbner, got {}".format(current_scan_number))
             self._last_scannum = current_scan_number
         elif self._last_scannum == current_scan_number:
-            log.debug("Checking scan number {} == {}, doing nothing.".format(current_scan_number, self._last_scannum))
+            #log.debug("Checking scan number {} == {}, doing nothing.".format(current_scan_number, self._last_scannum))
             pass
         else:
             log.debug("Scan number change detected from {} -> {}".format(self._last_scannum, current_scan_number))
             self._last_scannum = current_scan_number
+
+            if not self.__legacypulsarmode:
+                log.debug("Legacy pulsar mode disbaled. Not reacting on scannumber change!")
+                return
 
             sourcename = self.__eddDataStore.getTelescopeDataItem("source-name")
             if sourcename.endswith("_R"):
@@ -169,6 +174,46 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
     @scpi_request()
     def request_edd_deprovision(self, req):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.deprovision))
+
+
+    @scpi_request(str)
+    def request_edd_noisediodebysourcename(self, req, message):
+        log.debug("Setting pulsar mode")
+        if message.upper() in ['ON', 'TRUE', 'ENABLED']:
+            self.__legacypulsarmode = True
+        elif message.upper() in ['OFF', 'FALSE', 'DISABLED']:
+            self.__legacypulsarmode = False
+        else:
+            em = "Error setting {} - expecting ON or OFF.".format(message)
+            log.error(em)
+            req.error(em)
+        req.ok()
+
+    @scpi_request(str)
+    def request_edd_measurementprepare(self, req, message):
+        """
+        Sends a raw measurement prepare json to the master controller. Note that \ and " have to be escaped. To send a json dict with two strings {"foo":"bar"} you thus have to send the command EDD:MEASUREMENTPREPARE {\\\"foo\\\":\\\"bar\\\"}'
+        """
+
+        log.debug("Sending measurement prepare: {}".format(message))
+        try:
+            cfg = json.loads(message)
+        except:
+            em = "Not valid json!:\n {}".format(message)
+            log.error(em)
+            req.error(em)
+
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_prepare, cfg))
+
+
+    @scpi_request(float, float)
+    def request_edd_setnoisediodepattern(self, req, percentage, period):
+
+        log.debug("Sending noise diode fireing pattern: percentage={}, period={}".format(percentage, period))
+        cfg = {"set_noise_diode_firing_pattern": {"percentage":percentage, "period":period}}
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_prepare, cfg))
+
+
 
 
 if __name__ == "__main__":
