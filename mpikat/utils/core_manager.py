@@ -59,10 +59,18 @@ class CoreManager(object):
 
 
     def get_cores(self, taskname):
+        """
+        Get list of cores reserved for the task
+        """
         if self.__new_task:
             self.__finalize_cores()
-        return ",".join(self.__tasks[taskname]['reserved_cores'])
+        return self.__tasks[taskname]['reserved_cores']
 
+    def get_coresstr(self, taskname):
+        """
+        Get list of cores reserved for the task as comma seperated string ready to be used e.g. for taskset.
+        """
+        return ",".join(self.get_cores(taskname))
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(name)s %(levelname)s %(message)s')

@@ -33,11 +33,18 @@ class Test_core_manager(unittest.TestCase):
         self.assertEqual(len(self.cm.get_cores('T1')), 1)
         self.assertEqual(len(self.cm.get_cores('T2')), 2)
 
+
+    def test_list_str_equivalence(self):
+        self.cm.add_task('T1', 3)
+
+        self.assertEqual(self.cm.get_cores('T1'), self.cm.get_coresstr("T1").split(','))
+
+
     def test_non_ovverlap(self):
         self.cm.add_task('T1', len(numa.getInfo()['0']['cores']) // 2)
         self.cm.add_task('T2', len(numa.getInfo()['0']['cores']) // 2)
-        T1 = self.cm.get_cores('T1').split(',')
-        T2 = self.cm.get_cores('T2').split(',')
+        T1 = self.cm.get_cores('T1')
+        T2 = self.cm.get_cores('T2')
         #print("XXX", T1, type(T1))
         self.assertEqual(len(T1), len(set(T1)), "Cores associated to task multiple times: {}".format(T1))
         self.assertEqual(len(T2), len(set(T2)), "Cores associated to task multiple times: {}".format(T2))
