@@ -1,4 +1,4 @@
-image: edd01:5000/eddbase:latest
+image: edd01:5000/tobi_dev:latest
 
 before_script:
   - apt-get -y update && apt-get install -y python-ipaddress python-coverage
