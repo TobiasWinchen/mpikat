@@ -1,5 +1,4 @@
-#from __future__ import print_function, unicode_literals, division
-
+from __future__ import print_function, unicode_literals, division
 """
 Copyright (c) 2019 Jason Wu <jwu@mpifr-bonn.mpg.de>
 
@@ -745,7 +744,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING EDDPolnMerge                             #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-            numa=self.numa_number, cpu=self.__coreManager.get_corestr'single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
+            numa=self.numa_number, cpu=self.__coreManager.get_corestr('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
@@ -883,3 +882,4 @@ class EddPulsarPipeline(EDDPipeline):
 
 if __name__ == "__main__":
     launchPipelineServer(EddPulsarPipeline)
+
