@@ -41,3 +41,16 @@ test_debug_output:
   when: on_failure
 
 
+pages:
+  stage: deploy
+  dependencies:
+    - execute_unit_tests
+  script:
+    - python-coverage html
+    - mkdir public
+    - mv htmlcov/ public/coverage
+  artifacts:
+    paths:
+      - public
+  only:
+    - dev
