@@ -1,11 +1,22 @@
 #!/usr/bin/env python
-"""
-Executes all tests.
-ToDo: To be removed and replaced with aut discovery
-"""
-
-from mpikat.utils.test.test_ip_utils import *
+#
+# Executes all discovered tests and logs debug output to file
+#
 
 
-if __name__ == '__main__':
-    unittest.main()
+import logging
+import unittest
+
+
+if __name__ == "__main__":
+    logging.basicConfig(filename='debug.log',
+        format=("[ %(levelname)s - %(asctime)s - %(name)s "
+             "- %(filename)s:%(lineno)s] %(message)s"),
+            level=logging.DEBUG)
+
+    loader = unittest.TestLoader()
+    tests = loader.discover(pattern="test*.py",
+                            start_dir="mpikat")
+    runner = unittest.runner.TextTestRunner()
+    res = runner.run(tests)
+    exit(len(res.failures))

@@ -68,7 +68,7 @@ def updateInfo():
         logging.debug("  found {} Cores.".format(len(__numaInfo[node]['cores'])))
     logging.debug("Available nodes: {}".format(__numaInfo.keys()))
 
-    logging.debug(__numaInfo)
+    #logging.debug(__numaInfo)
     # check network devices
     for device in os.listdir("/sys/class/net/"):
         logging.debug("Associate network device {} to node".format(device))

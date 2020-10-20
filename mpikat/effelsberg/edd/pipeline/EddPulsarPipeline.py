@@ -61,11 +61,11 @@ DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
     "mode": "Timing",
-    "cod_dm": 0,                            # dm for coherent filterbanking, tested up to 3000                
+    "cod_dm": 0,                            # dm for coherent filterbanking, tested up to 3000
     "npol": 1,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
     "epta_directory": "epta",                # Data will be read from /mnt/epta_directory
     "nchannels": 1024,                       # only used in timing mode
-    "nbins": 1024,                           # only used in timing mode   
+    "nbins": 1024,                           # only used in timing mode
     "tempo2_telescope_name": "Effelsberg",
     "merge_application": "edd_merge",
     "npart": 2,
@@ -612,7 +612,7 @@ class EddPulsarPipeline(EDDPipeline):
             log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
             if (parse_tag(self._source_name) == "default") & is_accessible(epta_file):
                 cmd = 'numactl -m {} taskset -c {} tempo2 -f {} -pred'.format(
-                    self.numa_number, self.__coreManager.get_cores('single'),
+                    self.numa_number, self.__coreManager.get_coresstr('single'),
                     epta_file).split()
 
                 cmd.append("{} {} {} {} {} 24 2 3599.999999999".format(self._config["tempo2_telescope_name"], Time.now().mjd - 1, Time.now().mjd + 1, float(central_freq) - 200, float(central_freq) + 200))
@@ -693,7 +693,7 @@ class EddPulsarPipeline(EDDPipeline):
                         name=self._source_name,
                         predictor="/tmp/t2pred.dat",
                         parfile=epta_file,
-                        cpus=self.__coreManager.get_cores('dspsr'),
+                        cpus=self.__coreManager.get_coresstr('dspsr'),
                         cuda_number=self.cuda_number,
                         keyfile=self.dada_key_file.name)
 
@@ -703,7 +703,7 @@ class EddPulsarPipeline(EDDPipeline):
                         args=self._config["dspsr_params"]["args"],
                         nchan="-F {}:D".format(self._config["nchannels"]),
                         name=self._source_name,
-                        cpus=self.__coreManager.get_cores('dspsr'),
+                        cpus=self.__coreManager.get_coresstr('dspsr'),
                         cuda_number=self.cuda_number,
                         keyfile=self.dada_key_file.name)
             else:
@@ -723,7 +723,7 @@ class EddPulsarPipeline(EDDPipeline):
                 nchan=self._filterbank_nchannels,
                 decimation=self._decimation,
                 name=self._source_name,
-                cpus=self.__coreManager.get_cores('dspsr'),
+                cpus=self.__coreManager.get_coresstr('dspsr'),
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
         if self._config["mode"] == "Baseband":
@@ -745,7 +745,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING EDDPolnMerge                             #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-            numa=self.numa_number, cpu=self.__coreManager.get_cores('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
+            numa=self.numa_number, cpu=self.__coreManager.get_corestr'single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
@@ -756,7 +756,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING MKRECV                                   #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --quiet".format(
-            numa=self.numa_number, cpu=self.__coreManager.get_cores('mkrecv'), dada_header=self.dada_header_file.name)
+            numa=self.numa_number, cpu=self.__coreManager.get_coresstr('mkrecv'), dada_header=self.dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ManagedProcess(cmd)

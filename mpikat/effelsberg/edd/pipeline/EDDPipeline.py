@@ -1,3 +1,4 @@
+from __future__ import print_function, division, unicode_literals
 """
 Copyright (c) 2019 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
 
@@ -413,7 +414,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         @brief  Returns the config as dict.
         """
-        if isinstance(config_json, str):
+        if isinstance(config_json, str) or isinstance(config_json, unicode):
             log.debug("Received config as string:\n  {}".format(config_json))
             if (not config_json.strip()) or config_json.strip() == '""':
                 log.debug("String empty, returning empty dict.")
