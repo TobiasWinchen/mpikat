@@ -24,7 +24,6 @@ class CoreManager(object):
 
     def __finalize_cores(self):
         self.__new_task = False
-        print(numa.getInfo())
         numa_info = numa.getInfo()[self.__numa_node]
 
         cores = numa_info['cores']
