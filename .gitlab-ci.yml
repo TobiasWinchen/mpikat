@@ -1,17 +1,42 @@
-image: edd01:5000/tobi_dev:latest
+stages:
+  - test
+  - deploy
 
+
+image: edd01:5000/edd_gated_stokes
 before_script:
   - apt-get -y update && apt-get install -y python-ipaddress python-coverage
 
+
 execute_unit_tests:
+  stage: test
   script:
-    - python2-coverage run  --omit */site-packages/* -m unittest discover
-    - python2-coverage xml
+    - python2-coverage run  --omit "*/site-packages/*" test.py
   only:
     - pushes
     - merge_requests
+  artifacts:
+    untracked: true
 
+
+test_coverage:
+  stage: deploy
+  dependencies:
+    - execute_unit_tests
+  script:
+    - python2-coverage xml
   artifacts:
     reports:
       cobertura: coverage.xml
+  when: on_success
+
+
+test_debug_output:
+  stage: deploy
+  dependencies:
+    - execute_unit_tests
+  script:
+    - cat debug.log
+  when: on_failure
+
 
