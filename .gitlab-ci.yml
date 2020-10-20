@@ -17,6 +17,7 @@ execute_unit_tests:
     - merge_requests
   artifacts:
     untracked: true
+    when: always
 
 
 test_coverage:
