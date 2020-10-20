@@ -223,7 +223,13 @@ class FitsInterfaceServer(EDDPipeline):
             self._fw_connection_manager.stop()
             self._fw_connection_manager.join()
             self._fw_connection_manager = None
-            log.debug("Conenction manager thread cleaned")
+            log.debug("Connection manager thread cleaned")
+
+
+    @state_change(target="idle", intermediate="deconfiguring", error='panic')
+    @coroutine
+    def deconfigure(self):
+        pass
 
 
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")
