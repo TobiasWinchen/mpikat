@@ -374,13 +374,13 @@ class GatedSpectrometerPipeline(EDDPipeline):
             if len(numa.getInfo()[node]['gpus']) < 1:
                 log.debug("Not enough gpus on numa node {} - removing from pool.".format(node))
                 continue
-            elif len(numa.getInfo()[node]['net_devices']) < 1:
-                log.debug("Not enough nics on numa node {} - removing from pool.".format(node))
-                continue
+            #elif len(numa.getInfo()[node]['net_devices']) < 1:
+            #    log.debug("Not enough nics on numa node {} - removing from pool.".format(node))
+            #    continue
             else:
                 self.__numa_node_pool.append(node)
 
-        log.debug("{} numa nodes remaining in pool after cosntraints.".format(len(self.__numa_node_pool)))
+        log.debug("{} numa nodes remaining in pool after constraints.".format(len(self.__numa_node_pool)))
 
         if len(self._config['input_data_streams']) > len(self.__numa_node_pool):
             raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['input_data_streams'])))
