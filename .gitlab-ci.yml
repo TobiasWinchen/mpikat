@@ -10,3 +10,8 @@ execute_unit_tests:
   only:
     - pushes
     - merge_requests
+
+  artifacts:
+    reports:
+      cobertura: coverage.xml
+
