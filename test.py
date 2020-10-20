@@ -7,6 +7,7 @@
 import logging
 import unittest
 
+
 if __name__ == "__main__":
     logging.basicConfig(filename='debug.log',
         format=("[ %(levelname)s - %(asctime)s - %(name)s "
@@ -17,4 +18,5 @@ if __name__ == "__main__":
     tests = loader.discover(pattern="test*.py",
                             start_dir="mpikat")
     runner = unittest.runner.TextTestRunner()
-    runner.run(tests)
+    res = runner.run(tests)
+    exit(len(res.failures))
