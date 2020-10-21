@@ -678,7 +678,6 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(self.in_path)
-        log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(
             self._source_name))
         if self._config["mode"] == "Timing":
@@ -787,7 +786,7 @@ class EddPulsarPipeline(EDDPipeline):
                    self._polnmerge_proc]
         for proc in process:
             proc.terminate(timeout=1)
-        if (parse_tag(self._source_name) == "default") & self.pulsar_flag:
+        if os.path.isfile("/tmp/t2pred.dat"):
             os.remove("/tmp/t2pred.dat")
         log.info("reset DADA buffer")
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
