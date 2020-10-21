@@ -744,7 +744,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING EDDPolnMerge                             #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-            numa=self.numa_number, cpu=self.__coreManager.get_corestr('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
+            numa=self.numa_number, cpu=self.__coreManager.get_coresstr('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
