@@ -701,7 +701,7 @@ class EDDPipeline(AsyncDeviceServer):
         pass
 
 
-def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, intermediate=None, error='error', timeout=120):
+def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abortwaitfor=['deconfiguring', 'error', 'panic'], intermediate=None, error='error', timeout=120):
     """
     @brief decorator to perform a state change in a method
 
@@ -710,6 +710,7 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, inte
     @param  intermediate: Intermediate state to assume while executing
     @param         error: State to assume on error
     @param       waitfor: Wait with the state changes until the current state set
+    @param  abortwaitfor: States that result in aborting the wait (with Failure)
     @param       timeout: If state change is not completed after [timeout] seconds, error state is assumed. Timeout can be None to wait indefinitely
     """
     def decorator_state_change(func):
@@ -727,6 +728,10 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, inte
                         raise RuntimeError("Waiting since {}s to assume state {} in preparation to change to {}. Aborting.".format(waiting_since, waitfor, target))
                     yield sleep(1)
                     waiting_since += 1
+
+                    if self.state in abortwaitfor:
+                        raise FailReply("Aborting waiting for state: {} due to state: {}".format(waitfor, self.state))
+
             if intermediate:
                 self.state = intermediate
             try:
