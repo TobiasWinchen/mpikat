@@ -137,6 +137,19 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
 
 
+    @scpi_request()
+    def request_edd_abort(self, req):
+        """
+        @brief      Stop the EDD backend processing
+
+        @param      req   An ScpiRequst object
+
+        @note       Suports SCPI request: 'EDD:ABORt'
+        """
+        self.__controller.measurement_stop()
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
+
+
     @scpi_request(str, str)
     def request_edd_set(self, req, product_option, value):
         """
