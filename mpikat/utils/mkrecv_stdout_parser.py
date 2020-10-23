@@ -2,6 +2,7 @@ from katcp import Sensor
 import logging
 import re
 import numpy as np
+import time
 
 log = logging.getLogger('mpikat.mkrecv_stdout_parser')
 
@@ -72,10 +73,12 @@ class MkrecvSensors:
 
     def stdout_handler(self, line):
         data = mkrecv_stdout_parser(line)
+        #ToDo: Use best time in system here from synctime + number of samples
+        timestamp = time.time()
 
         if "global-payload-received" in data:
             try:
-                self.sensors["global_payload_frac"].set_value(float(data["global-payload-received"]) / float(data["global-payload-expected"]))
+                self.sensors["global_payload_frac"].set_value(float(data["global-payload-received"]) / float(data["global-payload-expected"]), timestamp=timestamp)
             except ZeroDivisionError as E:
                 log.error("Zero division in sensor update. Received line:\n{}".format(line))
         if "heaps-completed" in data and "slot-nheaps" in data:
@@ -83,14 +86,14 @@ class MkrecvSensors:
             self.__received_heaps += data["heaps-completed"]
             self.__expected_heaps += data["slot-nheaps"]
             if self.__idx >= self.__nsum:
-                self.sensors["received_heaps_frac"].set_value( self.__received_heaps / float(self.__expected_heaps + 1E-128))
+                self.sensors["received_heaps_frac"].set_value( self.__received_heaps / float(self.__expected_heaps + 1E-128), timestamp=timestamp)
                 self.__idx = 0
                 self.__received_heaps = 0.
                 self.__expected_heaps = 0.
 
-            self.sensors['slot_expected_heaps'].set_value(data["slot-nheaps"])
-            self.sensors['slot_received_heaps'].set_value(data["heaps-completed"])
-            self.sensors['missing_heaps'].set_value(np.array2string(self.__missing_heaps))
+            self.sensors['slot_expected_heaps'].set_value(data["slot-nheaps"], timestamp=timestamp)
+            self.sensors['slot_received_heaps'].set_value(data["heaps-completed"], timestamp=timestamp)
+            self.sensors['missing_heaps'].set_value(np.array2string(self.__missing_heaps), timestamp=timestamp)
             # Zero out missing heaps data. Missing heaps is reported before
             # stat line!
             self.__missing_heaps -= self.__missing_heaps
