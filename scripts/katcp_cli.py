@@ -9,6 +9,8 @@ import re
 from optparse import OptionParser
 from cmd2 import Cmd
 from katcp import DeviceClient
+import datetime 
+
 
 logging.basicConfig(level=logging.INFO,
                     stream=sys.stderr,
@@ -66,6 +68,19 @@ class StreamClient(DeviceClient):
     def unhandled_request(self, msg):
         """Deal with unhandled replies"""
         self.to_stream("Unhandled request", msg)
+    def inform_sensor_value(self, msg):
+        """Deal with sensor values"""
+        #of = "# {} {} {}\n  ".format(msg.arguments[2], msg.arguments[0], )
+        #of = "# {} {} {}\n  ".format(msg.arguments[2], msg.arguments[1], time.ctime(float(msg.arguments[0])))
+
+        if msg.arguments[4].startswith("iVBORw0KGgo"):
+            data ="Some base64 encoded png image (hidden)" 
+        else:
+            data = decode_katcp_message(msg.arguments[4])
+        
+
+        of = "{} {}  {:20}   {}\n".format(datetime.datetime.fromtimestamp(float(msg.arguments[0])).isoformat(), msg.arguments[1], msg.arguments[2], data) 
+        self.stream.write(of)
 
 
 
