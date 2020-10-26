@@ -446,9 +446,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 # request is not there
                 continue
 
+            log.debug("Checking basic config {}".format(json.dumps(product, indent=4)))
             yield controller.set(product)
             cfg = yield controller.getConfig()
-            #log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
+            log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
 
             #cfg = EDDPipeline.updateConfig(cfg, product)
             self._config["products"][cfg['id']] = cfg
