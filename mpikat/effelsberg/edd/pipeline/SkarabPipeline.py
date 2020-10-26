@@ -142,7 +142,7 @@ class SkarabPipeline(EDDPipeline):
             # that they are consecutive
             outputs = cfg.pop('output_data_streams')
             log.debug("Pipeline set")
-            EDDPipeline.set(self, cfg)
+            yield EDDPipeline.set(self, cfg)
             log.debug("Re-adding outputs")
             self._config['output_data_streams'] = outputs
         else:
