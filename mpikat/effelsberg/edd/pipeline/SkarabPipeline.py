@@ -145,6 +145,7 @@ class SkarabPipeline(EDDPipeline):
             yield EDDPipeline.set(self, cfg)
             log.debug("Re-adding outputs")
             self._config['output_data_streams'] = outputs
+            self._configUpdated()
         else:
             EDDPipeline.set(self, cfg)
 
