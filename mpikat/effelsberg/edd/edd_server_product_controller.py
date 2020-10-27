@@ -35,11 +35,12 @@ class EddServerProductController(object):
             yield self._client.until_synced()
             response = yield self._client.req[request_name](*args, **kwargs)
         except Exception as E:
-            log.error("Error processing request: {}".format(E))
+            log.error("Error processing request: {} in {}".format(E, self.__product_id))
             raise E
         if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
-            raise RuntimeError(response.reply.arguments[1])
+            erm = "'{}' request failed in {} with error: {}".format(request_name, self.__product_id, response.reply.arguments[1])
+            log.error(erm)
+            raise RuntimeError(erm)
         else:
             log.debug("'{}' request successful".format(request_name))
             raise Return(response)
