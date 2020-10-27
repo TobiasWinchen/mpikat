@@ -377,6 +377,33 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         self.ioloop.add_callback(wrapper)
         raise AsyncReply
 
+    @request()
+    @return_reply()
+    def request_list_provisions(self, req):
+        """
+        @brief List all availbale provision descriptions 
+
+        """
+        @coroutine
+        def wrapper():
+            try:
+                all_files = os.listdir(os.path.join(self.__edd_ansible_git_repository_folder, "provison_descriptions"))
+                yml_files = [f for f in all_files if f.endswith('.yml')]
+                l = [" - {}".format(l[:-4]) for l in yml_files if l[:-4] + '.json' in all_files]
+                req.reply("ok", "\nAvailable provision descriptions:\n" +"\n".join(l))
+
+
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+     
+
 
     @coroutine
     def provision(self, description):
