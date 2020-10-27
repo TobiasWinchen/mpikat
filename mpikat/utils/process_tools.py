@@ -28,6 +28,9 @@ def process_watcher(process, name=None, timeout=120, allow_fail=False):
     while process.poll() is None:
         yield sleep(0.2)
         if (time.time() - start) > timeout:
+            log.error('Process execution timed out after {}s'.format(timeout))
+            log.error("Process STDOUT dump {}:\n{}".format( name, process.stdout.read()))
+            log.error("Process STDERR dump {}:\n{}".format( name, process.stderr.read()))
             process.kill()
             raise ProcessTimeout
     if process.returncode != 0 and not allow_fail:

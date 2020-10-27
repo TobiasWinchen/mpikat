@@ -415,9 +415,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         try:
             yield command_watcher("ansible-playbook -i {} {}".format(self.__inventory, playbook_file),
                     env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
-                        "roles")})
+                        "roles")}, timeout=120)
         except Exception as E:
-            raise FailReply("Error in provisioning {}".format(E))
+            raise FailReply("Error in provisioning thrown by ansible {}".format(E))
         self.__provisioned = playbook_file
 
         try:
