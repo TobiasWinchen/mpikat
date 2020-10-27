@@ -575,7 +575,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             except Exception as E:
                 raise FailReply("Error in provisioning {}".format(E))
             self.__eddDataStore.updateProducts()
-            self.__eddDataStore._dataStreams.flushdb()
+        self.__eddDataStore.flush()
+            #self.__eddDataStore._dataStreams.flushdb()
         self.__provisioned = None
 
 
