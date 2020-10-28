@@ -32,15 +32,11 @@ import mpikat.utils.numa as numa
 from mpikat.utils.core_manager import CoreManager
 from mpikat.utils.ip_utils import ipstring_to_list
 
-from tornado.gen import coroutine
+from tornado.gen import coroutine, sleep
 from katcp import Sensor, AsyncReply, FailReply
 
 import os
-import time
 import logging
-import signal
-from optparse import OptionParser
-import coloredlogs
 import json
 import tempfile
 
@@ -559,10 +555,10 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             self.__watchdogs.append(wd)
             # Wait for one integration period before finishing to ensure
             # streaming has started before OK
-            time.sleep(self._integration_time_status.value())
+            yield sleep(self._integration_time_status.value())
 
 
-    @state_change(target="idle", allowed=["streaming"], intermediate="capture_stopping")
+    @state_change(target="idle", allowed=["streaming", "deconfiguring"], intermediate="capture_stopping")
     @coroutine
     def capture_stop(self):
         """
