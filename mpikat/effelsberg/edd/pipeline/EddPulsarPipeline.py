@@ -25,7 +25,7 @@ from mpikat.utils.process_monitor import SubprocessMonitor
 import mpikat.utils.numa as numa
 from mpikat.utils.core_manager import CoreManager
 
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change, StateChange
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 from mpikat.effelsberg.edd.pipeline.dada_rnt import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.pipeline.EddPulsarPipeline_blank_image import BLANK_IMAGE
@@ -489,7 +489,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug('Received capture start, doing nothing.')
 
 
-    @state_change(target="set", allowed=["ready", "measurement_starting"], intermediate="measurement_preparing")
+    @state_change(target="set", allowed=["ready", "measurement_starting", "configured", "streaming"], intermediate="measurement_preparing")
     @coroutine
     def measurement_prepare(self, config_json):
         self._subprocessMonitor = SubprocessMonitor()
@@ -507,8 +507,8 @@ class EddPulsarPipeline(EDDPipeline):
             self.pulsar_flag = is_accessible(epta_file)
             if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
                 if (parse_tag(self._source_name) != "FB"):
-                    error = "source {} is not pulsar or calibrator".format(self._source_name)
-                    raise EddPulsarPipelineError(error)
+                    log.warning("source {} is neither pulsar nor calibrator. Will not react until next measurement prepare".format(self._source_name))
+                    raise StateChange("streaming")
 
         self._timer = Time.now()
         log.debug("Setting blank image")
