@@ -133,7 +133,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:STOP'
         """
-        self.__controller.measurement_stop()
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
 
 
@@ -146,7 +145,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:ABORt'
         """
-        self.__controller.measurement_stop()
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
 
 
