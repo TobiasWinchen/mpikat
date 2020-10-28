@@ -273,6 +273,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         @brief      Deconfigure the EDD backend.
         """
         log.info("Deconfiguring all products:")
+        log.debug("Sending deconfigure to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Deconfigure: {}".format(cid))
             yield controller.deconfigure()
@@ -293,6 +294,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     source and position information necessary for the population of output file
                     headers.
         """
+        log.debug("Sending capture_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Capture start: {}".format(cid))
             yield controller.capture_start()
@@ -308,6 +310,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     stream once configured. Processing components (such as the FITS interfaces)
                     which must be cognisant of scan boundaries should respond to this request.
         """
+        log.debug("Sending capture_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Capture stop: {}".format(cid))
             yield controller.capture_stop()
@@ -323,6 +326,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             log.error("Error parsing json")
             raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
 
+        log.debug("Sending measurement_prepare to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Measurement prepare: {}".format(cid))
             yield controller.measurement_prepare(cfg)
@@ -332,6 +336,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     def measurement_start(self):
         """
         """
+        log.debug("Sending measurement_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Measurement start: {}".format(cid))
             yield controller.measurement_start()
@@ -341,6 +346,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     def measurement_stop(self):
         """
         """
+        log.debug("Sending measurement_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         for cid, controller in self.__controller.iteritems():
             log.debug("  - Measurement stop: {}".format(cid))
             yield controller.measurement_stop()
@@ -402,7 +408,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             else:
                 req.reply("ok")
         self.ioloop.add_callback(wrapper)
-     
 
 
     @coroutine
@@ -576,7 +581,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 raise FailReply("Error in provisioning {}".format(E))
             self.__eddDataStore.updateProducts()
         self.__eddDataStore.flush()
-            #self.__eddDataStore._dataStreams.flushdb()
         self.__provisioned = None
 
 
