@@ -774,7 +774,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Took {} s to start".format(self._timer * 86400))
 
 
-    @state_change(target="ready", allowed=["measuring"], intermediate="measurement_stopping")
+    @state_change(target="ready", intermediate="measurement_stopping")
     @coroutine
     def measurement_stop(self):
         """@brief stop mkrecv merging application and dspsr instances."""
