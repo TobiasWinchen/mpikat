@@ -142,15 +142,13 @@ class MockFitsWriterClient(object):
 
     @coroutine
     def recv_loop(self):
-        try:
-            header, sections = yield self.recv_packet()
-        except StopEvent:
-            log.debug("Notifying that recv calls have stopped")
-            self._is_stopped.notify()
-        except Exception as E:
-            log.exception("Failure while receiving packet: {}".format(E))
-        else:
-            self._ioloop.add_callback(self.recv_loop)
+        while not self._stop_event.is_set():
+            try:
+                header, sections = yield self.recv_packet()
+            except StopEvent:
+                log.debug("Notifying that recv calls have stopped")
+            except Exception as E:
+                log.exception("Failure while receiving packet: {}".format(E))
 
     def start(self):
         self._stop_event.clear()
