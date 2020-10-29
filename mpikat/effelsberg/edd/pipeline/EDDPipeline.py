@@ -768,11 +768,11 @@ def on_shutdown(ioloop, server):
     ioloop.stop()
 
 
-def getArgumentParser():
+def getArgumentParser(description = ""):
     """
     @brief Provide a arguemnt parser with standard arguments for all pipelines.
     """
-    parser = ArgumentParser()
+    parser = ArgumentParser(description=description)
     parser.add_argument('-H', '--host', dest='host', type=str, default='localhost',
                       help='Host interface to bind to')
     parser.add_argument('-p', '--port', dest='port', type=int, default=1235,
