@@ -23,6 +23,14 @@ import mpikat.utils.numa as numa
 log = logging.getLogger("mpikat.edd_fits_interface")
 
 
+def conditional_update(sensor, value, status=1, timestamp=None):
+    """
+    Update a sensor if the value has changed
+    """
+    if sensor.value() != value:
+        sensor.set_value(value, status, tiemstamp)
+
+
 class FitsWriterConnectionManager(Thread):
     """
     A class to handle TCP connections to the APEX FITS writer.
@@ -47,7 +55,8 @@ class FitsWriterConnectionManager(Thread):
         self.__output_queue = queue.PriorityQueue()
         self.__delay = 3         # keep a packet for self.__delay seconds in the queue, as there might be other packages arriving.
         self.__latestPackageTime = 0
-        self.__send_items = 0
+        self.send_items = 0
+        self.dropped_items = 0
 
         self._transmit_socket = None
         log.debug("Creating the FITS writer TCP listening socket")
@@ -69,6 +78,8 @@ class FitsWriterConnectionManager(Thread):
                 transmit_socket, addr = self._server_socket.accept()
                 self._has_connection.set()
                 log.info("Received connection from {}".format(addr))
+                self.send_items = 0
+                self.dropped_items = 0
                 return transmit_socket
             except socket.error as error:
                 error_id = error.args[0]
@@ -133,11 +144,12 @@ class FitsWriterConnectionManager(Thread):
                 log.debug("Flushing queue. Current size: {}".format(self.__output_queue.qsize()))
             if ref_time < self.__latestPackageTime:
                 log.warning("Package with ref_time {} in queue, but previously send {}. Dropping package.".format(ref_time,  self.__latestPackageTime))
+                self.dropped_items += 1
             else:
-                log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.__send_items, time.ctime(timestamp), pkg.timestamp))
+                log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.send_items, time.ctime(timestamp), pkg.timestamp))
                 self.__latestPackageTime = ref_time
                 self._transmit_socket.send(bytearray(pkg))
-                self.__send_items += 1
+                self.send_items += 1
 
 
     def queue_is_empty(self):
@@ -148,6 +160,8 @@ class FitsWriterConnectionManager(Thread):
         """
         Empty queue without sending
         """
+        self.send_items = 0
+        self.dropped_items = 0
         while not self.__output_queue.empty():
             self.__output_queue.get(timeout=1)
             self.__output_queue.task_done()
@@ -211,6 +225,53 @@ class FitsInterfaceServer(EDDPipeline):
         self._shutdown = False
         self.mc_interface = []
 
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        EDDPipeline.setup_sensors(self)
+
+        self._fw_connection_status = Sensor.discrete(
+            "fits-writer-connection-status",
+            description="Status of the fits writer conenction",
+            params=["Unmanaged", "Connected", "Unconnected" ],
+            default="Unmanaged",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fw_connection_status)
+
+        self._fw_packages_sent = Sensor.integer(
+            "fw-sent-packages",
+            description="Number of packages sent to fits writer in this measurement",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fw_packages_sent)
+
+        self._fw_packages_dropped = Sensor.integer(
+            "fw-dropped-packages",
+            description="Number of packages dropped by fits writer in this measurement",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fw_packages_dropped)
+
+        self._incomplete_heaps = Sensor.integer(
+            "incomplete-heaps",
+            description="Incomplete heaps received.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._incomplete_heaps)
+
+        self._complete_heaps = Sensor.integer(
+            "complete-heaps",
+            description="Complete heaps received.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._complete_heaps)
+
+        self._output_rate_status = Sensor.string(
+            "bandpass",
+            description="band-pass data (base64 encoded)",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._output_rate_status)
+
+
+
+    @state_change(target="idle", allowed=["streaming", "deconfiguring"], intermediate="capture_stopping")
     @coroutine
     def capture_stop(self):
         if self._capture_thread:
@@ -243,10 +304,7 @@ class FitsInterfaceServer(EDDPipeline):
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
-        # find fastest nic on host
-
         #ToDo: allow streams with multiple multicast groups and multiple ports
-
         self.mc_interface = []
         self.mc_port = None
         for stream_description in self._config['input_data_streams']:
@@ -271,13 +329,6 @@ class FitsInterfaceServer(EDDPipeline):
     def capture_start(self):
         """
         """
-        #recheck if there is a connection manager
-
-
-        #try:
-        #    fw_socket = self._fw_connection_manager.get_transmit_socket()
-        #except Exception as error:
-        #    raise RuntimeError("Exception in getting fits writer transmit socker: {}".format(error))
         log.info("Starting FITS interface capture")
         nic_name, nic_description = numa.getFastestNic()
         self._capture_interface = nic_description['ip']
@@ -290,6 +341,25 @@ class FitsInterfaceServer(EDDPipeline):
                                            self._capture_interface,
                                            handler, affinity)
         self._capture_thread.start()
+
+    @coroutine
+    def periodic_sensor_update(self):
+        """
+        Updates the sensors periodically.
+        """
+        t = time.time()
+        if not self._fw_connection_manager:
+            conditional_update(self._fw_connection_status, "Unmanaged", t)
+        elif not self._fw_connection_manager._has_connection.is_set():
+            conditional_update(self._fw_connection_status, "Unconnected", t)
+        else:
+            conditional_update(self._fw_connection_status, "Connected", t)
+            conditional_update(self._fw_packages_sent, self._fw_connection_manager.send_items, t)
+            conditional_update(self._fw_packages_dropped, self._fw_connection_manager.dropped_items, t)
+        if self._capture_thread:
+            conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, t)
+            conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, t)
+
 
 
     @state_change(target="measuring",  intermediate="measurement_starting")
@@ -319,14 +389,6 @@ class FitsInterfaceServer(EDDPipeline):
         yield self._fw_connection_manager.drop_connection()
 
 
-    @coroutine
-    def stop(self):
-        """
-        Stop pipeline server.
-        """
-        yield self.capture_stop()
-
-
 
 class SpeadCapture(Thread):
     """
@@ -347,7 +409,7 @@ class SpeadCapture(Thread):
         self._mc_port = mc_port
         self._capture_ip = capture_ip
         self._stop_event = Event()
-        self._handler = speadhandler 
+        self._handler = speadhandler
 
         #ToDo: fix magic numbers for parameters in spead stream
         thread_pool = spead2.ThreadPool(threads=8, affinity=[int(k) for k in numa_affinity])
@@ -361,6 +423,9 @@ class SpeadCapture(Thread):
         #pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         #self.stream.set_memory_allocator(pool)
         #self.rb = self.stream.ringbuffer
+        self._nheaps = 0
+        self._incomplete_heaps = 0
+        self._complete_heaps = 0
 
 
     def stop(self):
