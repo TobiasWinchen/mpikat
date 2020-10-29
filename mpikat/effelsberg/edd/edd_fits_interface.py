@@ -393,6 +393,23 @@ class FitsInterfaceServer(EDDPipeline):
         yield self._fw_connection_manager.drop_connection()
 
 
+    @coroutine
+    def stop(self):
+        """
+        Handle server stop. Stop all threads
+        """
+        try:
+            if self._fw_connection_manager:
+                self._fw_connection_manager.stop()
+                self._fw_connection_manager.join(3.0)
+            if self._capture_thread:
+                self._capture_thread.stop()
+                self._capture_thread.join(3.0)
+        except Exception as E:
+            log.error("Exception during stop! {}".format(E))
+        super(FitsInterfaceServer, self).stop()
+
+
 
 class SpeadCapture(Thread):
     """
