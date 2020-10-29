@@ -219,7 +219,8 @@ class MockFitsWriterClient(object):
 
 class MockFitsWriter(EDDPipeline.EDDPipeline):
     def __init__(self, ip, port, fits_ip, fits_port, record_to):
-        super(MockFitsWriter, self).__init__(ip, port)
+        df = {"id": "MockFitsWriter", "type": "MockFitsWriter"}
+        super(MockFitsWriter, self).__init__(ip, port, df)
         self.__fits_ip = fits_ip
         self.__fits_port = fits_port
         self.__record_to = record_to
