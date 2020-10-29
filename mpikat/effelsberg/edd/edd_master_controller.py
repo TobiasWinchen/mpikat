@@ -346,7 +346,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Sending measurement_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
         for cid, controller in self.__controller.iteritems():
-            future.append(controller.measurement_start())
+            futures.append(controller.measurement_start())
         yield futures
 
 
