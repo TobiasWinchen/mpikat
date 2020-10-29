@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 from tornado.gen import coroutine, sleep
+from tornado.ioloop import PeriodicCallback
 import logging
 import socket
 import time
@@ -28,7 +29,7 @@ def conditional_update(sensor, value, status=1, timestamp=None):
     Update a sensor if the value has changed
     """
     if sensor.value() != value:
-        sensor.set_value(value, status, tiemstamp)
+        sensor.set_value(value, status, timestamp=timestamp)
 
 
 class FitsWriterConnectionManager(Thread):
@@ -225,6 +226,9 @@ class FitsInterfaceServer(EDDPipeline):
         self._shutdown = False
         self.mc_interface = []
 
+        self.__periodic_callback = PeriodicCallback(self.periodic_sensor_update, 1000)
+        self.__periodic_callback.start()
+
     def setup_sensors(self):
         """
         @brief Setup monitoring sensors
@@ -347,18 +351,18 @@ class FitsInterfaceServer(EDDPipeline):
         """
         Updates the sensors periodically.
         """
-        t = time.time()
+        timestamp = time.time()
         if not self._fw_connection_manager:
-            conditional_update(self._fw_connection_status, "Unmanaged", t)
+            conditional_update(self._fw_connection_status, "Unmanaged", timestamp=timestamp)
         elif not self._fw_connection_manager._has_connection.is_set():
-            conditional_update(self._fw_connection_status, "Unconnected", t)
+            conditional_update(self._fw_connection_status, "Unconnected", timestamp=timestamp)
         else:
-            conditional_update(self._fw_connection_status, "Connected", t)
-            conditional_update(self._fw_packages_sent, self._fw_connection_manager.send_items, t)
-            conditional_update(self._fw_packages_dropped, self._fw_connection_manager.dropped_items, t)
+            conditional_update(self._fw_connection_status, "Connected", timestamp=timestamp)
+            conditional_update(self._fw_packages_sent, self._fw_connection_manager.send_items, timestamp=timestamp)
+            conditional_update(self._fw_packages_dropped, self._fw_connection_manager.dropped_items, timestamp=timestamp)
         if self._capture_thread:
-            conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, t)
-            conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, t)
+            conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, timestamp=timestamp)
+            conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, timestamp=timestamp)
 
 
 
