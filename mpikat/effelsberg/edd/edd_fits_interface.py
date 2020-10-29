@@ -1,4 +1,4 @@
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from tornado.gen import coroutine, sleep
 from tornado.ioloop import PeriodicCallback
 import logging
