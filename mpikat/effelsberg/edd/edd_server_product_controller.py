@@ -30,7 +30,7 @@ class EddServerProductController(object):
 
     @coroutine
     def _safe_request(self, request_name, *args, **kwargs):
-        log.info("Sending request '{}' with arguments {}".format(request_name, args))
+        log.info("Sending request '{}' to {} with arguments {}".format(request_name, self.__product_id, args))
         try:
             yield self._client.until_synced()
             response = yield self._client.req[request_name](*args, **kwargs)

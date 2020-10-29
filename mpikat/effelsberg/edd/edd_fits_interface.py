@@ -300,7 +300,7 @@ class FitsInterfaceServer(EDDPipeline):
         self._fw_connection_manager._is_measuring.set()
 
 
-    @state_change(target="ready", allowed=["measuring"], intermediate="measurement_stopping")
+    @state_change(target="ready", intermediate="measurement_stopping")
     @coroutine
     def measurement_stop(self):
         log.info("Stopping FITS interface data transfer")

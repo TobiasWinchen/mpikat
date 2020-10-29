@@ -64,6 +64,11 @@ def updateConfig(oldo, new):
 
 
 
+class StateChange(Exception):
+    """
+    Special exception that causes a state change to a state other than the defined error states.
+    """
+    pass
 
 
 
@@ -719,7 +724,9 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abor
         def wrapper(self, *args, **kwargs):
             log.debug("Decorator managed state change {} -> {}".format(self.state, target))
             if self.state not in allowed:
-                raise FailReply("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
+                log.warning("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
+                return
+                #raise FailReply("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
             if waitfor:
                 waiting_since = 0
                 while (self.state != waitfor):
@@ -739,6 +746,8 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abor
                     yield with_timeout(datetime.timedelta(seconds=timeout), func(self, *args, **kwargs))
                 else:
                     yield func(self, *args, **kwargs)
+            except StateChange as E:
+                self.state = str(E)
             except Exception as E:
                 self.state = error
                 raise E

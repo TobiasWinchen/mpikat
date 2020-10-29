@@ -257,10 +257,13 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
+        log.debug("Sending configure to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for product in self._config["products"].itervalues():
             #inject global data store values into product configuration
             product["data_store"] = self._config["data_store"]
-            yield self.__controller[product['id']].configure(product)
+            futures.append(self.__controller[product['id']].configure(product))
+        yield futures
 
         self._edd_config_sensor.set_value(json.dumps(self._config))
         log.info("Successfully configured EDD")
@@ -273,9 +276,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         @brief      Deconfigure the EDD backend.
         """
         log.info("Deconfiguring all products:")
+        log.debug("Sending deconfigure to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for cid, controller in self.__controller.iteritems():
-            log.debug("  - Deconfigure: {}".format(cid))
-            yield controller.deconfigure()
+            futures.append(controller.deconfigure())
+        yield futures
         #self._update_products_sensor()
 
 
@@ -293,9 +298,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     source and position information necessary for the population of output file
                     headers.
         """
+        log.debug("Sending capture_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for cid, controller in self.__controller.iteritems():
-            log.debug("  - Capture start: {}".format(cid))
-            yield controller.capture_start()
+            futures.append(controller.capture_start())
+        yield futures
 
 
     @coroutine
@@ -308,9 +315,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     stream once configured. Processing components (such as the FITS interfaces)
                     which must be cognisant of scan boundaries should respond to this request.
         """
+        log.debug("Sending capture_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for cid, controller in self.__controller.iteritems():
-            log.debug("  - Capture stop: {}".format(cid))
-            yield controller.capture_stop()
+            futures.append(controller.capture_stop())
+        yield futures
 
 
     @coroutine
@@ -323,27 +332,33 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             log.error("Error parsing json")
             raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
 
+        log.debug("Sending measurement_prepare to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for cid, controller in self.__controller.iteritems():
-            log.debug("  - Measurement prepare: {}".format(cid))
-            yield controller.measurement_prepare(cfg)
+            futures.append(controller.measurement_prepare(cfg))
+        yield futures
 
 
     @coroutine
     def measurement_start(self):
         """
         """
+        log.debug("Sending measurement_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for cid, controller in self.__controller.iteritems():
-            log.debug("  - Measurement start: {}".format(cid))
-            yield controller.measurement_start()
+            future.append(controller.measurement_start())
+        yield futures
 
 
     @coroutine
     def measurement_stop(self):
         """
         """
+        log.debug("Sending measurement_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
+        futures = []
         for cid, controller in self.__controller.iteritems():
-            log.debug("  - Measurement stop: {}".format(cid))
-            yield controller.measurement_stop()
+            futures.append(controller.measurement_stop())
+        yield futures
 
 
     def reset(self):
@@ -402,7 +417,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             else:
                 req.reply("ok")
         self.ioloop.add_callback(wrapper)
-     
 
 
     @coroutine
@@ -576,7 +590,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 raise FailReply("Error in provisioning {}".format(E))
             self.__eddDataStore.updateProducts()
         self.__eddDataStore.flush()
-            #self.__eddDataStore._dataStreams.flushdb()
         self.__provisioned = None
 
 
