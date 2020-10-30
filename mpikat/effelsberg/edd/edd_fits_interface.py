@@ -219,7 +219,7 @@ class FitsInterfaceServer(EDDPipeline):
         @param  fw_port            Port number to connect to FITS writer
         """
         EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[],
-            id="fits_interface", type="fits_interface",
+            id="fits_interface", type="fits_interface", drop_nans=True,
             fits_writer_ip="0.0.0.0", fits_writer_port=5002))
         self._fw_connection_manager = None
         self._capture_thread = None
@@ -267,11 +267,17 @@ class FitsInterfaceServer(EDDPipeline):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._complete_heaps)
 
-        self._output_rate_status = Sensor.string(
+        self._invalid_packages = Sensor.integer(
+            "invalid-packages",
+            description="Number of invalid packages dropped.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._invalid_packages)
+
+        self._bandpass = Sensor.string(
             "bandpass",
             description="band-pass data (base64 encoded)",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._output_rate_status)
+        self.add_sensor(self._bandpass)
 
 
 
@@ -300,6 +306,10 @@ class FitsInterfaceServer(EDDPipeline):
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
+        """
+        Options:
+            drop_nans   (bool)      Drop spectra containing a nan to not confuse the fits writer.
+        """
         log.info("Configuring Fits interface")
         log.debug("Configuration string: '{}'".format(config_json))
 
@@ -339,7 +349,7 @@ class FitsInterfaceServer(EDDPipeline):
         log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
         affinity = numa.getInfo()[nic_description['node']]['cores']
 
-        handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager, len(self._config['input_data_streams']))
+        handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager, len(self._config['input_data_streams']), drop_invalid_packages=self._config['drop_nans'])
         self._capture_thread = SpeadCapture(self.mc_interface,
                                            self.mc_port,
                                            self._capture_interface,
@@ -363,6 +373,7 @@ class FitsInterfaceServer(EDDPipeline):
         if self._capture_thread:
             conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, timestamp=timestamp)
             conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, timestamp=timestamp)
+            conditional_update(self._invalid_packages, self._capture_thread._handler.invalidPackages, timestamp=timestamp)
 
 
 
@@ -563,10 +574,13 @@ class GatedSpectrometerSpeadHandler(object):
     Complete packages are passed to the fits interface queue
     number of input streams tro handle. half per gate.
     """
-    def __init__(self, fits_interface, number_input_streams, max_age = 10):
+    def __init__(self, fits_interface, number_input_streams, max_age = 10, drop_invalid_packages=True):
 
         self.__max_age = max_age
         self.__fits_interface = fits_interface
+        self.__drop_invalid_packages = drop_invalid_packages
+        self.invalidPackages = 0        # count invalid packages
+
 
         #Description of heap items
         self.ig = spead2.ItemGroup()
@@ -611,7 +625,6 @@ class GatedSpectrometerSpeadHandler(object):
             return
 
 
-
         class SpeadPacket:
             """
             Contains the items as members with conversion
@@ -622,6 +635,69 @@ class GatedSpectrometerSpeadHandler(object):
                         setattr(self, item.name, convert48_64(item.value))
                     else:
                         setattr(self, item.name, item.value)
+
+
+        class PrepPack:
+            """
+            Package in preparation
+            """
+            def __init__(self, number_of_spectra, nchannels):
+                self._nspectra = number_of_spectra
+                self.fw_pkt = fw_factory(number_of_spectra, nchannels)  # Actual package for fits writer
+                self.counter = 0    # Counts spectra set in fw_pkg
+                self.valid = True   # Invalid package will not be send to fits writer
+
+            def addSpectrum(self, packet):
+                """
+                Includes packet with spead spectrum into the fw output package
+                """
+                self.counter += 1
+                log.debug("   This is {} / {} parts for reference_time: {:.3f}".format(pp.counter , self._nspectra, packet.reference_time))
+
+                # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
+                # but ctypes may not be aligned
+                sec_id = packet.polarization
+                #ToDo: calculation of offsets without magic numbers
+
+                log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
+                packet.data /= (packet.number_of_input_samples + 1E-30)
+                log.debug("                After normalization: {}".format(packet.data[:5]))
+                if np.isnan(packet.data).any():
+                    log.debug("Invalidate package due to NaN detected")
+                    self.valid = False
+                ctypes.memmove(ctypes.byref(self.fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
+                        packet.data.size * 4 - 4)
+
+                if self.counter == self._nspectra:
+                    # Fill header fields + output data
+                    log.debug("Got all parts for reference_time {:.3f} - Finalizing".format(packet.reference_time))
+
+                    # Convert timestamp to datetimestring in UTC
+                    def local_to_utc(t):
+                        secs = time.mktime(t)
+                        return time.gmtime(secs)
+                    dto = datetime.fromtimestamp(packet.reference_time)
+                    timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
+
+                    # Blank should be at the end according to specification
+                    timestamp += ".{:04d}UTC ".format(int((float(packet.reference_time) - int(packet.reference_time)) * 10000))
+                    self.fw_pkt.timestamp = timestamp
+                    log.debug("   Calculated timestamp for fits: {}".format(self.fw_pkt.timestamp))
+
+                    integration_time = packet.number_of_input_samples / float(packet.sampling_rate)
+                    log.debug("   Integration period: {} s".format(packet.integration_period))
+                    log.debug("   Received samples in period: {}".format(packet.number_of_input_samples))
+                    log.debug("   Integration time: {} s".format(integration_time))
+
+                    self.fw_pkt.backend_name = "EDDSPEAD"
+                    # As the data is normalized to the actual nyumber of samples, the
+                    # integration time for the fits writer corresponds to the nominal
+                    # time.
+                    self.fw_pkt.integration_time = int(packet.integration_period * 1000) # in ms
+
+                    self.fw_pkt.blank_phases = int(2 - packet.noise_diode_status)
+                    log.debug("   Noise diode status: {}, Blank phase: {}".format(packet.noise_diode_status, self.fw_pkt.blank_phases))
+
 
 
         packet = SpeadPacket(items)
@@ -643,58 +719,21 @@ class GatedSpectrometerSpeadHandler(object):
             self.__now = packet.reference_time
 
         if packet.reference_time not in self.__packages_in_preparation:
-            fw_pkt = fw_factory(self.__number_of_input_streams // 2, int(self.nchannels) - 1)
-            counter = 1
+            pp = PrepPack(self.__number_of_input_streams // 2, int(self.nchannels) - 1)
         else:
-            fw_pkt, counter = self.__packages_in_preparation[packet.reference_time]
-            counter += 1
-        log.debug("   This is {} / {} parts for reference_time: {:.3f}".format(counter , self.__number_of_input_streams / 2, packet.reference_time))
+            pp = self.__packages_in_preparation.pop(packet.reference_time)
 
-        # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
-        # but ctypes may not be aligned
-        sec_id = packet.polarization
-        #ToDo: calculation of offsets without magic numbers
+        pp.addSpectrum(packet)
 
-        log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
-        packet.data /= (packet.number_of_input_samples + 1E-30)
-        log.debug("                After normalization: {}".format(packet.data[:5]))
-        ctypes.memmove(ctypes.byref(fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
-                packet.data.size * 4 - 4)
-
-        if counter == self.__number_of_input_streams // 2:
-            # Fill header fields + output data
-            log.debug("Got all parts for reference_time {:.3f} - Finalizing".format(packet.reference_time))
-
-            # Convert timestamp to datetimestring in UTC
-            def local_to_utc(t):
-                secs = time.mktime(t)
-                return time.gmtime(secs)
-            dto = datetime.fromtimestamp(packet.reference_time)
-            timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
-
-            # Blank should be at the end according to specification
-            timestamp += ".{:04d}UTC ".format(int((float(packet.reference_time) - int(packet.reference_time)) * 10000))
-            fw_pkt.timestamp = timestamp
-            log.debug("   Calculated timestamp for fits: {}".format(fw_pkt.timestamp))
-
-            integration_time = packet.number_of_input_samples / float(packet.sampling_rate)
-            log.debug("   Integration period: {} s".format(packet.integration_period))
-            log.debug("   Received samples in period: {}".format(packet.number_of_input_samples))
-            log.debug("   Integration time: {} s".format(integration_time))
-
-            fw_pkt.backend_name = "EDDSPEAD"
-            # As the data is normalized to the actual nyumber of samples, the
-            # integration time for the fits writer corresponds to the nominal
-            # time.
-            fw_pkt.integration_time = int(packet.integration_period * 1000) # in ms
-
-            fw_pkt.blank_phases = int(2 - packet.noise_diode_status)
-            log.debug("   Noise diode status: {}, Blank phase: {}".format(packet.noise_diode_status, fw_pkt.blank_phases))
-
-            self.__fits_interface.put(self.__packages_in_preparation.pop(packet.reference_time)[0])
+        if pp.counter == self.__number_of_input_streams // 2:
+            if self.__drop_invalid_packages and not pp.valid:
+                log.warning("Package for reference time {} dropped because it is invalid!".format(packet.reference_time))
+                self.invalidPackages += 1
+            else:
+                self.__fits_interface.put(pp.fw_pkt)
 
         else:
-            self.__packages_in_preparation[packet.reference_time] = [fw_pkt, counter]
+            self.__packages_in_preparation[packet.reference_time] = pp
             # Cleanup old packages
             tooold_packages = []
             log.debug('Checking {} packages for age restriction'.format(len(self.__packages_in_preparation)))
