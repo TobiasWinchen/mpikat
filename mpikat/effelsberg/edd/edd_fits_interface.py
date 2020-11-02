@@ -12,6 +12,9 @@ from datetime import datetime
 from threading import Thread, Event
 import Queue as queue       # In python 3 this will be queue
 
+from multiprocessing import Process, Pipe
+
+
 import spead2
 import spead2.recv
 
@@ -22,6 +25,10 @@ from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipeli
 import mpikat.utils.numa as numa
 
 log = logging.getLogger("mpikat.edd_fits_interface")
+
+
+# Artificial time delta between noise diode on / off status
+NOISEDIODETIMEDELTA = 0.001
 
 
 def conditional_update(sensor, value, status=1, timestamp=None):
@@ -229,6 +236,10 @@ class FitsInterfaceServer(EDDPipeline):
         self.__periodic_callback = PeriodicCallback(self.periodic_sensor_update, 1000)
         self.__periodic_callback.start()
 
+        self.__bandpass_callback = PeriodicCallback(self.bandpassplotter , 10000)
+        self.__bandpass_callback.start()
+        self.__plotting = False
+
     def setup_sensors(self):
         """
         @brief Setup monitoring sensors
@@ -374,6 +385,129 @@ class FitsInterfaceServer(EDDPipeline):
             conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, timestamp=timestamp)
             conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, timestamp=timestamp)
             conditional_update(self._invalid_packages, self._capture_thread._handler.invalidPackages, timestamp=timestamp)
+
+    @coroutine
+    def bandpassplotter(self):
+        log.debug("Starting periodic plot of bandpass")
+        try:
+            yield self.bandpassplotterwrapper()
+        except Exception as E:
+            logging.error(E)
+
+    @coroutine
+    def bandpassplotterwrapper(self):
+        pks = []
+
+        plottingQueue = self._capture_thread._handler.plottingQueue
+
+        found_pair = []
+        log.debug(" Checking pairs of spectra ...")
+
+        while not plottingQueue.empty():
+            ref_time, pkg = plottingQueue.get(timeout=1)
+            plottingQueue.task_done()
+            if found_pair:
+                # continue clearing queue
+                continue
+            pks.append([ref_time, pkg])
+            for t, pkg2 in pks:
+                dt = ref_time - t
+                if abs(abs(dt) - NOISEDIODETIMEDELTA) < NOISEDIODETIMEDELTA / 2:
+                    log.debug(" Matching pair found after looking at {} packages, dt: {}".format(len(pks), dt))
+                    found_pair = [pkg, pkg2, min(ref_time, t)]
+                    break
+
+        if not found_pair:
+            log.warning("No matching set of pkgs found to create bandpass plot!")
+            for x in pks:
+                plottingQueue.put(x)
+            return
+        log.error("Creating plot with matching pair")
+
+        if self.__plotting:
+            log.warning("Previous plot not finished, dropping plot!")
+            return
+        self.__plotting = True
+
+        def plot_script(conn, pk1, pk2, ndisplay_channels=1024):
+            import matplotlib as mpl
+            mpl.use('Agg')
+            import numpy as np
+            import pylab as plt
+            import cStringIO
+            import base64
+            mpl.rcParams.update(mpl.rcParamsDefault)
+            mpl.use('Agg')
+
+            nsections = pk1.nsections
+            nchannels = pk1.sections[0].nchannels
+
+            figsize = {2: (8, 4), 4: (8, 8)}
+            fig, subs = plt.subplots(nsections // 2, 2, figsize=figsize[nsections])
+
+            labels = {2: ["PSD [dB]", 'PSd [dB]'], 4: ["I [dB]", "Q/I", "U/I", "V/I"]}
+            D = np.zeros([2, nsections, ndisplay_channels])
+            if nsections == 2:
+                D[pk1.blank_phases-1][0] = 10 * np.log10(np.ctypeslib.as_array(pk1.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+                D[pk1.blank_phases-1][1] = 10 * np.log10(np.ctypeslib.as_array(pk1.sections[1].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+                D[pk2.blank_phases-1][0] = 10 * np.log10(np.ctypeslib.as_array(pk2.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+                D[pk2.blank_phases-1][1] = 10 * np.log10(np.ctypeslib.as_array(pk2.sections[1].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+            elif nsections == 4:
+                D[pk1.blank_phases-1][0] = np.ctypeslib.as_array(pk1.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1)
+                D[pk2.blank_phases-1][0] = np.ctypeslib.as_array(pk2.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1)
+                for i in range(1,4):
+                    D[pk1.blank_phases-1][i] = np.ctypeslib.as_array(pk1.sections[i].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1) / D[pk1.blank_phases-1][0]
+                    D[pk2.blank_phases-1][i] = np.ctypeslib.as_array(pk2.sections[i].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1) / D[pk2.blank_phases-1][0]
+                D[0][0] = 10 * np.log10(D[0][0])
+                D[1][0] = 10 * np.log10(D[0][0])
+
+            for i,s  in enumerate(subs.flat):
+                s.plot(D[0][i], label = "BS Phase 1")
+                s.plot(D[1][i], label = "BS Phase 2")
+                s.set_xlabel('Channel')
+                s.set_ylabel(labels[nsections][i])
+                s.legend(fontsize='x-small', loc='upper right',  ncol =2)
+            #bbox_anchor = {2: (0, -.15), 4: (0, -.15)}
+            #s.legend(fontsize='x-small', loc='upper right', bbox_to_anchor=bbox_anchor[nsections], ncol =2)
+            fig.suptitle('{} / {}'.format(pk1.timestamp, pk2.timestamp))
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+            fig_buffer = cStringIO.StringIO()
+            fig.savefig(fig_buffer, format='png')
+            fig_buffer.seek(0)    
+            b64 = base64.b64encode(fig_buffer.read())
+            conn.send(b64)
+            conn.close()
+
+
+#plot_script(dummy(), pk1, pk2)
+
+
+
+
+
+
+        log.debug("Create pipe")
+        parent_conn, child_conn = Pipe()
+        log.debug("Preparing Subprocess")
+        p = Process(target=plot_script, args=(child_conn, found_pair[0].fw_pkt, found_pair[1].fw_pkt,))
+        log.debug("Starting Subprocess")
+        p.start()
+        log.debug("Waiting for subprocess to finish")
+        while p.is_alive():
+            log.debug("Still waiting ...")
+            yield sleep(0.5)
+        #p.join()
+        log.error("Receiving data")
+        try:
+            plt = parent_conn.recv()
+            log.error("Received {} bytes".format(len(plt)))
+        except Exception as E:
+            log.error('Error communicating with subprocess:\n {}'.format(E))
+            return
+        log.error("Setting bandpass sensor with timestamp")
+        self._bandpass.set_value(plt, timestamp=found_pair[2])
+        log.debug("Ready for next plot")
+        self.__plotting = False
 
 
 
@@ -581,6 +715,7 @@ class GatedSpectrometerSpeadHandler(object):
         self.__drop_invalid_packages = drop_invalid_packages
         self.invalidPackages = 0        # count invalid packages
 
+        self.plottingQueue = queue.PriorityQueue()
 
         #Description of heap items
         self.ig = spead2.ItemGroup()
@@ -599,6 +734,8 @@ class GatedSpectrometerSpeadHandler(object):
 
         # Now is the latest checked package
         self.__now = 0
+
+        self.__bandpass = None
 
 
     def __call__(self, heap):
@@ -657,7 +794,6 @@ class GatedSpectrometerSpeadHandler(object):
                 # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
                 # but ctypes may not be aligned
                 sec_id = packet.polarization
-                #ToDo: calculation of offsets without magic numbers
 
                 log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
                 packet.data /= (packet.number_of_input_samples + 1E-30)
@@ -665,6 +801,7 @@ class GatedSpectrometerSpeadHandler(object):
                 if np.isnan(packet.data).any():
                     log.debug("Invalidate package due to NaN detected")
                     self.valid = False
+                #ToDo: calculation of offsets without magic numbers
                 ctypes.memmove(ctypes.byref(self.fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
                         packet.data.size * 4 - 4)
 
@@ -713,8 +850,9 @@ class GatedSpectrometerSpeadHandler(object):
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
-            packet.reference_time += 0.001
+            packet.reference_time += NOISEDIODETIMEDELTA 
 
+        # Update local time
         if packet.reference_time > self.__now:
             self.__now = packet.reference_time
 
@@ -726,14 +864,19 @@ class GatedSpectrometerSpeadHandler(object):
         pp.addSpectrum(packet)
 
         if pp.counter == self.__number_of_input_streams // 2:
+
+            self.plottingQueue.put([packet.reference_time, pp])
+
+            # package is done. Send or drop
             if self.__drop_invalid_packages and not pp.valid:
                 log.warning("Package for reference time {} dropped because it is invalid!".format(packet.reference_time))
                 self.invalidPackages += 1
             else:
                 self.__fits_interface.put(pp.fw_pkt)
-
         else:
+            # Package not done, (re-)add to preparation stash
             self.__packages_in_preparation[packet.reference_time] = pp
+
             # Cleanup old packages
             tooold_packages = []
             log.debug('Checking {} packages for age restriction'.format(len(self.__packages_in_preparation)))
@@ -745,6 +888,35 @@ class GatedSpectrometerSpeadHandler(object):
                     tooold_packages.append(p)
             for p in tooold_packages:
                 self.__packages_in_preparation.pop(p)
+
+    def statusOutput(self, fw_pkt, timestamp):
+        """
+        Create status output from fitswriter package
+        """
+        if not hasattr(self, self.__newPlot):
+            self.__newPlot = True
+            self.__plotData = [None, None]
+
+        if not self.__newPlot:
+            # not creating a new plot, but maybe next turn?
+            if timestamp - self.__lastplot > self.__plotrate:
+                if self.__plotData[0] or self.__plotData[0]:
+                    log.warning("Previous plot not finished. Dropping plot!")
+                else:
+                    self.__newPlot = True
+            return
+            nsections = fw_pkt.nsections
+            nchannels = fw_pkt.sections[0].nchannels
+            self.plot_data[fw_pkt.blank_phases - 1] = np.ctypeslib.as_array(fw_pkt.sections, shape=(nsections, nchannels)).copy()
+
+        if self._blankSyncCounter[0] == self._blankSyncCounter[0]:
+            # this will not work if there are more than plot_freq spectra in
+            # one phase only in a series. But in general there should be a tic
+            if self.__plotting:
+                return
+            self.__plotting = True
+            K = subprocess
+
 
 
 
