@@ -156,13 +156,16 @@ class JsonStatusServer(AsyncDeviceServer):
         if data is None:
             log.warning("Catcher thread has not received any data yet")
             return
+        timestamp = time.time()
         for name, params in self._parser.items():
             if name in self._controlled:
                 continue
             if "updater" in params:
                 value = params["updater"](data)
-                self._sensors[name].set_value(value)
-                self.__eddDataStore.setTelescopeDataItem(name, value)
+
+                if self._sensors[name].value() != value:
+                    self._sensors[name].set_value(value, timestamp=timestamp)
+                    self.__eddDataStore.setTelescopeDataItem(name, value)
 
     @coroutine
     def start(self):
