@@ -28,6 +28,8 @@ import os
 import git
 import tornado
 import signal
+import yaml
+import tempfile
 
 from tornado.gen import Return, coroutine
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
@@ -420,6 +422,27 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
 
     @coroutine
+    def __ansible_subplay_executioner(self, play, additional_args=""):
+        """
+        Uses ansible-playbook to execute thegiven play by writing it in a tempfile.
+        Args:
+            play                The play to be executed
+            additional_args     Additional args added to the ansible execution, e.g. --tags=stop
+        """
+        playfile = tempfile.NamedTemporaryFile(delete=False)
+        yaml.dump([play], playfile)
+        playfile.close()
+
+        try:
+            yield command_watcher("ansible-playbook -i {} {} {}".format(self.__inventory, playfile.name, additional_args), env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder, "roles")}, timeout=240)
+        except Exception as E:
+            playfile.unlink()
+            raise RuntimeError("Error {} processing play:\n {}".format(E, yaml.dump(play)))
+
+
+
+
+    @coroutine
     def provision(self, description):
         """
         @brief provision the edd with provided provision description.
@@ -454,11 +477,22 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             raise FailReply("cannot find config file {}".format(basic_config_file))
 
         try:
-            yield command_watcher("ansible-playbook -i {} {}".format(self.__inventory, playbook_file),
-                    env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
-                        "roles")}, timeout=240)
+            provision_playbook = yaml.load(open(playbook_file,'r'))
+        except Exception as E:
+            log.error(E)
+            raise FailReply("Error in provisioning, cannot load file: {}".format(E))
+
+        try:
+            subplay_futures = []
+            log.debug("Executing playbook as {} seperate subplays in parallel".format(len(provision_playbook)))
+            for play in provision_playbook:
+                subplay_futures.append(self.__ansible_subplay_executioner(play))
+
+            yield subplay_futures
         except Exception as E:
             raise FailReply("Error in provisioning thrown by ansible {}".format(E))
+
+
         self.__provisioned = playbook_file
 
         try:
@@ -583,11 +617,21 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Deprovision {}".format(self.__provisioned))
         if self.__provisioned:
             try:
-                yield command_watcher("ansible-playbook -i {} {} --tags=stop".format(self.__inventory, self.__provisioned),
-                        env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
-                            "roles")}, timeout=240)
+                provision_playbook = yaml.load(open(self.__provisioned,'r'))
             except Exception as E:
-                raise FailReply("Error in provisioning {}".format(E))
+                log.error(E)
+                raise FailReply("Error in deprovisioning, cannot load file: {}".format(E))
+
+            try:
+                subplay_futures = []
+                log.debug("Executing playbook as {} seperate subplays in parallel".format(len(provision_playbook)))
+                for play in provision_playbook:
+                    subplay_futures.append(self.__ansible_subplay_executioner(play, "--tags=stop"))
+
+                yield subplay_futures
+            except Exception as E:
+                raise FailReply("Error in deprovisioning thrown by ansible {}".format(E))
+
             self.__eddDataStore.updateProducts()
         self.__eddDataStore.flush()
         self.__provisioned = None
