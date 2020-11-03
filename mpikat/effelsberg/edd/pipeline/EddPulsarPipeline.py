@@ -716,9 +716,10 @@ class EddPulsarPipeline(EDDPipeline):
                 self._filterbank_nchannels = 11264
             cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}.fits {keyfile}".format( numa=self.numa_number, npol=self._config["npol"], DM=self._config["cod_dm"], nchan=self._filterbank_nchannels, decimation=self._decimation, name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
         if self._config["mode"] == "Baseband":
-            cmd = "numactl -m {numa} dada_dbdisk -D ./ -o -z -s -k {keyfile}".format(
+            cmd = "numactl -m {numa} dada_dbdisk -D {in_path} -b {cpus} -o -k dadc".format(
                 numa=self.numa_number,
-                keyfile=self.dada_key_file.name)
+                in_path = self.in_path,
+                cpus=self.__coreManager.get_coresstr('dspsr'))
 
         log.debug("Running command: {0}".format(cmd))
         if self._config["mode"] == "Timing":
