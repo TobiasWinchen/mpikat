@@ -1,5 +1,6 @@
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from tornado.gen import coroutine, sleep
+from tornado.ioloop import PeriodicCallback
 import logging
 import socket
 import time
@@ -11,6 +12,9 @@ from datetime import datetime
 from threading import Thread, Event
 import Queue as queue       # In python 3 this will be queue
 
+from multiprocessing import Process, Pipe
+
+
 import spead2
 import spead2.recv
 
@@ -21,6 +25,18 @@ from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipeli
 import mpikat.utils.numa as numa
 
 log = logging.getLogger("mpikat.edd_fits_interface")
+
+
+# Artificial time delta between noise diode on / off status
+NOISEDIODETIMEDELTA = 0.001
+
+
+def conditional_update(sensor, value, status=1, timestamp=None):
+    """
+    Update a sensor if the value has changed
+    """
+    if sensor.value() != value:
+        sensor.set_value(value, status, timestamp=timestamp)
 
 
 class FitsWriterConnectionManager(Thread):
@@ -47,7 +63,8 @@ class FitsWriterConnectionManager(Thread):
         self.__output_queue = queue.PriorityQueue()
         self.__delay = 3         # keep a packet for self.__delay seconds in the queue, as there might be other packages arriving.
         self.__latestPackageTime = 0
-        self.__send_items = 0
+        self.send_items = 0
+        self.dropped_items = 0
 
         self._transmit_socket = None
         log.debug("Creating the FITS writer TCP listening socket")
@@ -69,6 +86,8 @@ class FitsWriterConnectionManager(Thread):
                 transmit_socket, addr = self._server_socket.accept()
                 self._has_connection.set()
                 log.info("Received connection from {}".format(addr))
+                self.send_items = 0
+                self.dropped_items = 0
                 return transmit_socket
             except socket.error as error:
                 error_id = error.args[0]
@@ -133,11 +152,12 @@ class FitsWriterConnectionManager(Thread):
                 log.debug("Flushing queue. Current size: {}".format(self.__output_queue.qsize()))
             if ref_time < self.__latestPackageTime:
                 log.warning("Package with ref_time {} in queue, but previously send {}. Dropping package.".format(ref_time,  self.__latestPackageTime))
+                self.dropped_items += 1
             else:
-                log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.__send_items, time.ctime(timestamp), pkg.timestamp))
+                log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.send_items, time.ctime(timestamp), pkg.timestamp))
                 self.__latestPackageTime = ref_time
                 self._transmit_socket.send(bytearray(pkg))
-                self.__send_items += 1
+                self.send_items += 1
 
 
     def queue_is_empty(self):
@@ -148,6 +168,8 @@ class FitsWriterConnectionManager(Thread):
         """
         Empty queue without sending
         """
+        self.send_items = 0
+        self.dropped_items = 0
         while not self.__output_queue.empty():
             self.__output_queue.get(timeout=1)
             self.__output_queue.task_done()
@@ -204,13 +226,73 @@ class FitsInterfaceServer(EDDPipeline):
         @param  fw_port            Port number to connect to FITS writer
         """
         EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[],
-            id="fits_interface", type="fits_interface",
+            id="fits_interface", type="fits_interface", drop_nans=True,
             fits_writer_ip="0.0.0.0", fits_writer_port=5002))
         self._fw_connection_manager = None
         self._capture_thread = None
         self._shutdown = False
         self.mc_interface = []
 
+        self.__periodic_callback = PeriodicCallback(self.periodic_sensor_update, 1000)
+        self.__periodic_callback.start()
+
+        self.__bandpass_callback = PeriodicCallback(self.bandpassplotter , 10000)
+        self.__bandpass_callback.start()
+        self.__plotting = False
+
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        EDDPipeline.setup_sensors(self)
+
+        self._fw_connection_status = Sensor.discrete(
+            "fits-writer-connection-status",
+            description="Status of the fits writer conenction",
+            params=["Unmanaged", "Connected", "Unconnected" ],
+            default="Unmanaged",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fw_connection_status)
+
+        self._fw_packages_sent = Sensor.integer(
+            "fw-sent-packages",
+            description="Number of packages sent to fits writer in this measurement",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fw_packages_sent)
+
+        self._fw_packages_dropped = Sensor.integer(
+            "fw-dropped-packages",
+            description="Number of packages dropped by fits writer in this measurement",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fw_packages_dropped)
+
+        self._incomplete_heaps = Sensor.integer(
+            "incomplete-heaps",
+            description="Incomplete heaps received.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._incomplete_heaps)
+
+        self._complete_heaps = Sensor.integer(
+            "complete-heaps",
+            description="Complete heaps received.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._complete_heaps)
+
+        self._invalid_packages = Sensor.integer(
+            "invalid-packages",
+            description="Number of invalid packages dropped.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._invalid_packages)
+
+        self._bandpass = Sensor.string(
+            "bandpass",
+            description="band-pass data (base64 encoded)",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._bandpass)
+
+
+
+    @state_change(target="idle", allowed=["streaming", "deconfiguring"], intermediate="capture_stopping")
     @coroutine
     def capture_stop(self):
         if self._capture_thread:
@@ -235,6 +317,10 @@ class FitsInterfaceServer(EDDPipeline):
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
+        """
+        Options:
+            drop_nans   (bool)      Drop spectra containing a nan to not confuse the fits writer.
+        """
         log.info("Configuring Fits interface")
         log.debug("Configuration string: '{}'".format(config_json))
 
@@ -243,10 +329,7 @@ class FitsInterfaceServer(EDDPipeline):
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
-        # find fastest nic on host
-
         #ToDo: allow streams with multiple multicast groups and multiple ports
-
         self.mc_interface = []
         self.mc_port = None
         for stream_description in self._config['input_data_streams']:
@@ -271,25 +354,154 @@ class FitsInterfaceServer(EDDPipeline):
     def capture_start(self):
         """
         """
-        #recheck if there is a connection manager
-
-
-        #try:
-        #    fw_socket = self._fw_connection_manager.get_transmit_socket()
-        #except Exception as error:
-        #    raise RuntimeError("Exception in getting fits writer transmit socker: {}".format(error))
         log.info("Starting FITS interface capture")
         nic_name, nic_description = numa.getFastestNic()
         self._capture_interface = nic_description['ip']
         log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
         affinity = numa.getInfo()[nic_description['node']]['cores']
 
-        handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager, len(self._config['input_data_streams']))
+        handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager, len(self._config['input_data_streams']), drop_invalid_packages=self._config['drop_nans'])
         self._capture_thread = SpeadCapture(self.mc_interface,
                                            self.mc_port,
                                            self._capture_interface,
                                            handler, affinity)
         self._capture_thread.start()
+
+    @coroutine
+    def periodic_sensor_update(self):
+        """
+        Updates the sensors periodically.
+        """
+        timestamp = time.time()
+        if not self._fw_connection_manager:
+            conditional_update(self._fw_connection_status, "Unmanaged", timestamp=timestamp)
+        elif not self._fw_connection_manager._has_connection.is_set():
+            conditional_update(self._fw_connection_status, "Unconnected", timestamp=timestamp)
+        else:
+            conditional_update(self._fw_connection_status, "Connected", timestamp=timestamp)
+            conditional_update(self._fw_packages_sent, self._fw_connection_manager.send_items, timestamp=timestamp)
+            conditional_update(self._fw_packages_dropped, self._fw_connection_manager.dropped_items, timestamp=timestamp)
+        if self._capture_thread:
+            conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, timestamp=timestamp)
+            conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, timestamp=timestamp)
+            conditional_update(self._invalid_packages, self._capture_thread._handler.invalidPackages, timestamp=timestamp)
+
+    @coroutine
+    def bandpassplotter(self):
+        log.debug("Starting periodic plot of bandpass")
+        try:
+            yield self.bandpassplotterwrapper()
+        except Exception as E:
+            logging.error(E)
+
+    @coroutine
+    def bandpassplotterwrapper(self):
+        pks = []
+
+        plottingQueue = self._capture_thread._handler.plottingQueue
+
+        found_pair = []
+        log.debug(" Checking pairs of spectra ...")
+
+        while not plottingQueue.empty():
+            ref_time, pkg = plottingQueue.get(timeout=1)
+            plottingQueue.task_done()
+            if found_pair:
+                # continue clearing queue
+                continue
+            pks.append([ref_time, pkg])
+            for t, pkg2 in pks:
+                dt = ref_time - t
+                if abs(abs(dt) - NOISEDIODETIMEDELTA) < NOISEDIODETIMEDELTA / 2:
+                    log.debug(" Matching pair found after looking at {} packages, dt: {}".format(len(pks), dt))
+                    found_pair = [pkg, pkg2, min(ref_time, t)]
+                    break
+
+        if not found_pair:
+            log.warning("No matching set of pkgs found to create bandpass plot!")
+            for x in pks:
+                plottingQueue.put(x)
+            return
+        log.error("Creating plot with matching pair")
+
+        if self.__plotting:
+            log.warning("Previous plot not finished, dropping plot!")
+            return
+        self.__plotting = True
+
+        def plot_script(conn, pk1, pk2, ndisplay_channels=1024):
+            import matplotlib as mpl
+            mpl.use('Agg')
+            import numpy as np
+            import pylab as plt
+            import cStringIO
+            import base64
+            mpl.rcParams.update(mpl.rcParamsDefault)
+            mpl.use('Agg')
+
+            nsections = pk1.nsections
+            nchannels = pk1.sections[0].nchannels
+
+            figsize = {2: (8, 4), 4: (8, 8)}
+            fig, subs = plt.subplots(nsections // 2, 2, figsize=figsize[nsections])
+
+            labels = {2: ["PSD [dB]", 'PSd [dB]'], 4: ["I [dB]", "Q/I", "U/I", "V/I"]}
+            D = np.zeros([2, nsections, ndisplay_channels])
+            if nsections == 2:
+                D[pk1.blank_phases-1][0] = 10 * np.log10(np.ctypeslib.as_array(pk1.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+                D[pk1.blank_phases-1][1] = 10 * np.log10(np.ctypeslib.as_array(pk1.sections[1].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+                D[pk2.blank_phases-1][0] = 10 * np.log10(np.ctypeslib.as_array(pk2.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+                D[pk2.blank_phases-1][1] = 10 * np.log10(np.ctypeslib.as_array(pk2.sections[1].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1))
+            elif nsections == 4:
+                D[pk1.blank_phases-1][0] = np.ctypeslib.as_array(pk1.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1)
+                D[pk2.blank_phases-1][0] = np.ctypeslib.as_array(pk2.sections[0].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1)
+                for i in range(1,4):
+                    D[pk1.blank_phases-1][i] = np.ctypeslib.as_array(pk1.sections[i].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1) / D[pk1.blank_phases-1][0]
+                    D[pk2.blank_phases-1][i] = np.ctypeslib.as_array(pk2.sections[i].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1) / D[pk2.blank_phases-1][0]
+                D[0][0] = 10 * np.log10(D[0][0])
+                D[1][0] = 10 * np.log10(D[0][0])
+
+            for i,s  in enumerate(subs.flat):
+                s.plot(D[0][i], label = "BS Phase 1")
+                s.plot(D[1][i], label = "BS Phase 2")
+                s.set_xlabel('Channel')
+                s.set_ylabel(labels[nsections][i])
+                s.legend(fontsize='x-small', loc='upper right',  ncol =2)
+            #bbox_anchor = {2: (0, -.15), 4: (0, -.15)}
+            #s.legend(fontsize='x-small', loc='upper right', bbox_to_anchor=bbox_anchor[nsections], ncol =2)
+            fig.suptitle('{} / {}'.format(pk1.timestamp, pk2.timestamp))
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+            fig_buffer = cStringIO.StringIO()
+            fig.savefig(fig_buffer, format='png')
+            fig_buffer.seek(0)
+            b64 = base64.b64encode(fig_buffer.read())
+            conn.send(b64)
+            conn.close()
+
+
+        log.debug("Create pipe")
+        parent_conn, child_conn = Pipe()
+        log.debug("Preparing Subprocess")
+        p = Process(target=plot_script, args=(child_conn, found_pair[0].fw_pkt, found_pair[1].fw_pkt,))
+        log.debug("Starting Subprocess")
+        p.start()
+        log.debug("Waiting for subprocess to finish")
+        while p.is_alive():
+            log.debug("Still waiting ...")
+            yield sleep(0.5)
+        #p.join()
+        log.error("Receiving data")
+        try:
+            plt = parent_conn.recv()
+            log.error("Received {} bytes".format(len(plt)))
+        except Exception as E:
+            log.error('Error communicating with subprocess:\n {}'.format(E))
+            return
+        log.error("Setting bandpass sensor with timestamp")
+        self._bandpass.set_value(plt, timestamp=found_pair[2])
+        log.debug("Ready for next plot")
+        self.__plotting = False
+
 
 
     @state_change(target="measuring",  intermediate="measurement_starting")
@@ -322,9 +534,18 @@ class FitsInterfaceServer(EDDPipeline):
     @coroutine
     def stop(self):
         """
-        Stop pipeline server.
+        Handle server stop. Stop all threads
         """
-        yield self.capture_stop()
+        try:
+            if self._fw_connection_manager:
+                self._fw_connection_manager.stop()
+                self._fw_connection_manager.join(3.0)
+            if self._capture_thread:
+                self._capture_thread.stop()
+                self._capture_thread.join(3.0)
+        except Exception as E:
+            log.error("Exception during stop! {}".format(E))
+        super(FitsInterfaceServer, self).stop()
 
 
 
@@ -347,7 +568,7 @@ class SpeadCapture(Thread):
         self._mc_port = mc_port
         self._capture_ip = capture_ip
         self._stop_event = Event()
-        self._handler = speadhandler 
+        self._handler = speadhandler
 
         #ToDo: fix magic numbers for parameters in spead stream
         thread_pool = spead2.ThreadPool(threads=8, affinity=[int(k) for k in numa_affinity])
@@ -361,6 +582,9 @@ class SpeadCapture(Thread):
         #pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         #self.stream.set_memory_allocator(pool)
         #self.rb = self.stream.ringbuffer
+        self._nheaps = 0
+        self._incomplete_heaps = 0
+        self._complete_heaps = 0
 
 
     def stop(self):
@@ -477,10 +701,14 @@ class GatedSpectrometerSpeadHandler(object):
     Complete packages are passed to the fits interface queue
     number of input streams tro handle. half per gate.
     """
-    def __init__(self, fits_interface, number_input_streams, max_age = 10):
+    def __init__(self, fits_interface, number_input_streams, max_age = 10, drop_invalid_packages=True):
 
         self.__max_age = max_age
         self.__fits_interface = fits_interface
+        self.__drop_invalid_packages = drop_invalid_packages
+        self.invalidPackages = 0        # count invalid packages
+
+        self.plottingQueue = queue.PriorityQueue()
 
         #Description of heap items
         self.ig = spead2.ItemGroup()
@@ -499,6 +727,8 @@ class GatedSpectrometerSpeadHandler(object):
 
         # Now is the latest checked package
         self.__now = 0
+
+        self.__bandpass = None
 
 
     def __call__(self, heap):
@@ -525,7 +755,6 @@ class GatedSpectrometerSpeadHandler(object):
             return
 
 
-
         class SpeadPacket:
             """
             Contains the items as members with conversion
@@ -536,6 +765,71 @@ class GatedSpectrometerSpeadHandler(object):
                         setattr(self, item.name, convert48_64(item.value))
                     else:
                         setattr(self, item.name, item.value)
+
+
+        class PrepPack:
+            """
+            Package in preparation
+            """
+            def __init__(self, number_of_spectra, nchannels):
+                self._nspectra = number_of_spectra
+                self.fw_pkt = fw_factory(number_of_spectra, nchannels)  # Actual package for fits writer
+                self.counter = 0    # Counts spectra set in fw_pkg
+                self.valid = True   # Invalid package will not be send to fits writer
+                self.number_of_input_samples = 0
+
+            def addSpectrum(self, packet):
+                """
+                Includes packet with spead spectrum into the fw output package
+                """
+                self.counter += 1
+                log.debug("   This is {} / {} parts for reference_time: {:.3f}".format(pp.counter , self._nspectra, packet.reference_time))
+
+                # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
+                # but ctypes may not be aligned
+                sec_id = packet.polarization
+
+                log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
+                packet.data /= (packet.number_of_input_samples + 1E-30)
+                self.number_of_input_samples = packet.number_of_input_samples
+                log.debug("                After normalization: {}".format(packet.data[:5]))
+                if np.isnan(packet.data).any():
+                    log.debug("Invalidate package due to NaN detected")
+                    self.valid = False
+                #ToDo: calculation of offsets without magic numbers
+                ctypes.memmove(ctypes.byref(self.fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
+                        packet.data.size * 4 - 4)
+
+                if self.counter == self._nspectra:
+                    # Fill header fields + output data
+                    log.debug("Got all parts for reference_time {:.3f} - Finalizing".format(packet.reference_time))
+
+                    # Convert timestamp to datetimestring in UTC
+                    def local_to_utc(t):
+                        secs = time.mktime(t)
+                        return time.gmtime(secs)
+                    dto = datetime.fromtimestamp(packet.reference_time)
+                    timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
+
+                    # Blank should be at the end according to specification
+                    timestamp += ".{:04d}UTC ".format(int((float(packet.reference_time) - int(packet.reference_time)) * 10000))
+                    self.fw_pkt.timestamp = timestamp
+                    log.debug("   Calculated timestamp for fits: {}".format(self.fw_pkt.timestamp))
+
+                    integration_time = packet.number_of_input_samples / float(packet.sampling_rate)
+                    log.debug("   Integration period: {} s".format(packet.integration_period))
+                    log.debug("   Received samples in period: {}".format(packet.number_of_input_samples))
+                    log.debug("   Integration time: {} s".format(integration_time))
+
+                    self.fw_pkt.backend_name = "EDDSPEAD"
+                    # As the data is normalized to the actual nyumber of samples, the
+                    # integration time for the fits writer corresponds to the nominal
+                    # time.
+                    self.fw_pkt.integration_time = int(packet.integration_period * 1000) # in ms
+
+                    self.fw_pkt.blank_phases = int(2 - packet.noise_diode_status)
+                    log.debug("   Noise diode status: {}, Blank phase: {}".format(packet.noise_diode_status, self.fw_pkt.blank_phases))
+
 
 
         packet = SpeadPacket(items)
@@ -551,64 +845,33 @@ class GatedSpectrometerSpeadHandler(object):
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
-            packet.reference_time += 0.001
+            packet.reference_time += NOISEDIODETIMEDELTA 
 
+        # Update local time
         if packet.reference_time > self.__now:
             self.__now = packet.reference_time
 
         if packet.reference_time not in self.__packages_in_preparation:
-            fw_pkt = fw_factory(self.__number_of_input_streams // 2, int(self.nchannels) - 1)
-            counter = 1
+            pp = PrepPack(self.__number_of_input_streams // 2, int(self.nchannels) - 1)
         else:
-            fw_pkt, counter = self.__packages_in_preparation[packet.reference_time]
-            counter += 1
-        log.debug("   This is {} / {} parts for reference_time: {:.3f}".format(counter , self.__number_of_input_streams / 2, packet.reference_time))
+            pp = self.__packages_in_preparation.pop(packet.reference_time)
 
-        # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
-        # but ctypes may not be aligned
-        sec_id = packet.polarization
-        #ToDo: calculation of offsets without magic numbers
+        pp.addSpectrum(packet)
 
-        log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
-        packet.data /= (packet.number_of_input_samples + 1E-30)
-        log.debug("                After normalization: {}".format(packet.data[:5]))
-        ctypes.memmove(ctypes.byref(fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
-                packet.data.size * 4 - 4)
+        if pp.counter == self.__number_of_input_streams // 2:
 
-        if counter == self.__number_of_input_streams // 2:
-            # Fill header fields + output data
-            log.debug("Got all parts for reference_time {:.3f} - Finalizing".format(packet.reference_time))
+            self.plottingQueue.put([packet.reference_time, pp])
 
-            # Convert timestamp to datetimestring in UTC
-            def local_to_utc(t):
-                secs = time.mktime(t)
-                return time.gmtime(secs)
-            dto = datetime.fromtimestamp(packet.reference_time)
-            timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
-
-            # Blank should be at the end according to specification
-            timestamp += ".{:04d}UTC ".format(int((float(packet.reference_time) - int(packet.reference_time)) * 10000))
-            fw_pkt.timestamp = timestamp
-            log.debug("   Calculated timestamp for fits: {}".format(fw_pkt.timestamp))
-
-            integration_time = packet.number_of_input_samples / float(packet.sampling_rate)
-            log.debug("   Integration period: {} s".format(packet.integration_period))
-            log.debug("   Received samples in period: {}".format(packet.number_of_input_samples))
-            log.debug("   Integration time: {} s".format(integration_time))
-
-            fw_pkt.backend_name = "EDDSPEAD"
-            # As the data is normalized to the actual nyumber of samples, the
-            # integration time for the fits writer corresponds to the nominal
-            # time.
-            fw_pkt.integration_time = int(packet.integration_period * 1000) # in ms
-
-            fw_pkt.blank_phases = int(2 - packet.noise_diode_status)
-            log.debug("   Noise diode status: {}, Blank phase: {}".format(packet.noise_diode_status, fw_pkt.blank_phases))
-
-            self.__fits_interface.put(self.__packages_in_preparation.pop(packet.reference_time)[0])
-
+            # package is done. Send or drop
+            if self.__drop_invalid_packages and not pp.valid:
+                log.warning("Package for reference time {} dropped because it is invalid!".format(packet.reference_time))
+                self.invalidPackages += 1
+            else:
+                self.__fits_interface.put(pp.fw_pkt)
         else:
-            self.__packages_in_preparation[packet.reference_time] = [fw_pkt, counter]
+            # Package not done, (re-)add to preparation stash
+            self.__packages_in_preparation[packet.reference_time] = pp
+
             # Cleanup old packages
             tooold_packages = []
             log.debug('Checking {} packages for age restriction'.format(len(self.__packages_in_preparation)))
@@ -620,6 +883,35 @@ class GatedSpectrometerSpeadHandler(object):
                     tooold_packages.append(p)
             for p in tooold_packages:
                 self.__packages_in_preparation.pop(p)
+
+    def statusOutput(self, fw_pkt, timestamp):
+        """
+        Create status output from fitswriter package
+        """
+        if not hasattr(self, self.__newPlot):
+            self.__newPlot = True
+            self.__plotData = [None, None]
+
+        if not self.__newPlot:
+            # not creating a new plot, but maybe next turn?
+            if timestamp - self.__lastplot > self.__plotrate:
+                if self.__plotData[0] or self.__plotData[0]:
+                    log.warning("Previous plot not finished. Dropping plot!")
+                else:
+                    self.__newPlot = True
+            return
+            nsections = fw_pkt.nsections
+            nchannels = fw_pkt.sections[0].nchannels
+            self.plot_data[fw_pkt.blank_phases - 1] = np.ctypeslib.as_array(fw_pkt.sections, shape=(nsections, nchannels)).copy()
+
+        if self._blankSyncCounter[0] == self._blankSyncCounter[0]:
+            # this will not work if there are more than plot_freq spectra in
+            # one phase only in a series. But in general there should be a tic
+            if self.__plotting:
+                return
+            self.__plotting = True
+            K = subprocess
+
 
 
 

@@ -213,21 +213,6 @@ class EDDPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._edd_config_sensor)
 
-        self._device_status = Sensor.discrete(
-            "device-status",
-            description="Health status of device",
-            params=self.DEVICE_STATUSES,
-            default="ok",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._device_status)
-
-        self._status_change_time = Sensor.string(
-            "status-change-time",
-            description="Time of last status change",
-            default=datetime.datetime.now().replace(microsecond=0).isoformat(),
-            initial_status=Sensor.NOMINAL)
-        self.add_sensor(self._status_change_time)
-
         self._log_level = Sensor.string(
             "log-level",
             description="Log level",
@@ -303,7 +288,6 @@ class EDDPipeline(AsyncDeviceServer):
         self.previous_state = self._state
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
-        self._status_change_time.set_value(datetime.datetime.now().replace(microsecond=0).isoformat())
         self.notify()
 
 
@@ -726,7 +710,6 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abor
             if self.state not in allowed:
                 log.warning("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
                 return
-                #raise FailReply("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
             if waitfor:
                 waiting_since = 0
                 while (self.state != waitfor):
@@ -768,11 +751,11 @@ def on_shutdown(ioloop, server):
     ioloop.stop()
 
 
-def getArgumentParser():
+def getArgumentParser(description = ""):
     """
     @brief Provide a arguemnt parser with standard arguments for all pipelines.
     """
-    parser = ArgumentParser()
+    parser = ArgumentParser(description=description)
     parser.add_argument('-H', '--host', dest='host', type=str, default='localhost',
                       help='Host interface to bind to')
     parser.add_argument('-p', '--port', dest='port', type=int, default=1235,

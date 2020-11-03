@@ -1,3 +1,4 @@
+from __future__ import print_function, division, unicode_literals
 """
 Copyright (c) 2018 Ewan Barr <ebarr@mpifr-bonn.mpg.de>
 
@@ -32,6 +33,9 @@ from tornado.gen import coroutine, sleep, Return, TimeoutError
 from tornado.locks import Event, Condition
 from tornado.ioloop import IOLoop
 from argparse import ArgumentParser
+
+
+from mpikat.effelsberg.edd.pipeline import EDDPipeline 
 
 log = logging.getLogger("mpikat.mock_fw_client")
 
@@ -138,15 +142,13 @@ class MockFitsWriterClient(object):
 
     @coroutine
     def recv_loop(self):
-        try:
-            header, sections = yield self.recv_packet()
-        except StopEvent:
-            log.debug("Notifying that recv calls have stopped")
-            self._is_stopped.notify()
-        except Exception as E:
-            log.exception("Failure while receiving packet: {}".format(E))
-        else:
-            self._ioloop.add_callback(self.recv_loop)
+        while not self._stop_event.is_set():
+            try:
+                header, sections = yield self.recv_packet()
+            except StopEvent:
+                log.debug("Notifying that recv calls have stopped")
+            except Exception as E:
+                log.exception("Failure while receiving packet: {}".format(E))
 
     def start(self):
         self._stop_event.clear()
@@ -214,37 +216,36 @@ class MockFitsWriterClient(object):
         raise Return((header, sections))
 
 
-@coroutine
-def on_shutdown(ioloop, client):
-    log.info("Shutting down client")
-    yield client.stop()
-    ioloop.stop()
+
+class MockFitsWriter(EDDPipeline.EDDPipeline):
+    def __init__(self, ip, port, fits_ip, fits_port, record_to):
+        df = {"id": "MockFitsWriter", "type": "MockFitsWriter"}
+        super(MockFitsWriter, self).__init__(ip, port, df)
+        self.__fits_ip = fits_ip
+        self.__fits_port = fits_port
+        self.__record_to = record_to
+        self.__client = None
+
+    def measurement_start(self):
+        self.__client = MockFitsWriterClient((self.__fits_ip, self.__fits_port), self.__record_to)
+        self.__client.start()
+
+    def measurement_stop(self):
+        self.__client.stop()
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Receive (and optionally record) tcp packages send by EDD Fits writer interface.")
-    parser.add_argument('-H', '--host', dest='host', type=str,
-                      help='Host interface to connect to')
-    parser.add_argument ('-p', '--port', dest='port', type=int,
-                      help='Port number to connect to')
-    parser.add_argument('--log-level', dest='log_level', type=str, help='Log level', default="INFO")
+    parser = EDDPipeline.getArgumentParser(description="Receive (and optionally record) tcp packages send by EDD Fits writer interface.")
 
+    parser.add_argument('--fits_interface_host', dest='fits_host', type=str,
+                      help='Host interface to connect to', default='localhost')
+    parser.add_argument ('--fits_interface_port', dest='fits_port', type=int,
+                      help='Port number to connect to', default=5002)
     parser.add_argument('--record-to', dest='record_to', type=str,
                       help='Destination to record data to. No recording if empty', default="")
+
     args = parser.parse_args()
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
-    logging.getLogger('katcp').setLevel(logging.DEBUG)
-    coloredlogs.install(
-        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
-             "- %(filename)s:%(lineno)s] %(message)s"),
-        level=args.log_level.upper(),
-        logger=logger)
-    ioloop = IOLoop.current()
-    log.info("Starting MockFitsWriterClient instance")
-    client = MockFitsWriterClient((args.host, args.port), args.record_to)
-    signal.signal(
-        signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-            on_shutdown, ioloop, client))
-    client.start()
-    ioloop.start()
+    EDDPipeline.setup_logger(args)
+
+    server = MockFitsWriter(args.host, args.port, args.fits_host, args.fits_port, args.record_to)
+    EDDPipeline.launchPipelineServer(server, args)
