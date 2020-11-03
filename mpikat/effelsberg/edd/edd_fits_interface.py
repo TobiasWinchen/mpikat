@@ -473,17 +473,10 @@ class FitsInterfaceServer(EDDPipeline):
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
             fig_buffer = cStringIO.StringIO()
             fig.savefig(fig_buffer, format='png')
-            fig_buffer.seek(0)    
+            fig_buffer.seek(0)
             b64 = base64.b64encode(fig_buffer.read())
             conn.send(b64)
             conn.close()
-
-
-#plot_script(dummy(), pk1, pk2)
-
-
-
-
 
 
         log.debug("Create pipe")
@@ -783,6 +776,7 @@ class GatedSpectrometerSpeadHandler(object):
                 self.fw_pkt = fw_factory(number_of_spectra, nchannels)  # Actual package for fits writer
                 self.counter = 0    # Counts spectra set in fw_pkg
                 self.valid = True   # Invalid package will not be send to fits writer
+                self.number_of_input_samples = 0
 
             def addSpectrum(self, packet):
                 """
@@ -797,6 +791,7 @@ class GatedSpectrometerSpeadHandler(object):
 
                 log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
                 packet.data /= (packet.number_of_input_samples + 1E-30)
+                self.number_of_input_samples = packet.number_of_input_samples
                 log.debug("                After normalization: {}".format(packet.data[:5]))
                 if np.isnan(packet.data).any():
                     log.debug("Invalidate package due to NaN detected")
