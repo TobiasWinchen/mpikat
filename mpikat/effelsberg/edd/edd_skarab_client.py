@@ -22,7 +22,7 @@ SOFTWARE.
 
 from __future__ import print_function, division, unicode_literals
 
-from mpikat.utils.ip_utils import split_ipstring, is_validat_multicast_range
+from mpikat.utils.ip_utils import split_ipstring, is_valid_multicast_range
 
 from tornado.gen import coroutine, sleep
 from tornado.ioloop import IOLoop
@@ -134,9 +134,9 @@ class SkarabChannelizerClient(SkarabInterface):
 
         ip0, N0, p0 = split_ipstring(ips0)
         ip1, N1, p1 = split_ipstring(ips1)
-        if not is_validat_multicast_range(ip0, N0, p0):
+        if not is_valid_multicast_range(ip0, N0, p0):
             raise RuntimeError("Invalid multicast range {}".format(ips0))
-        if not is_validat_multicast_range(ip1, N1, p1):
+        if not is_valid_multicast_range(ip1, N1, p1):
             raise RuntimeError("Invalid multicast range {}".format(ips1))
         if not N0 == N1:
             raise RuntimeError("Multicast range of both interfaces have to match {} {}".format(ips0, ips1))

@@ -1,5 +1,5 @@
 from __future__ import print_function, division, unicode_literals
-from mpikat.utils.ip_utils import split_ipstring, is_validat_multicast_range, ipstring_from_list, ipstring_to_list
+from mpikat.utils.ip_utils import split_ipstring, is_valid_multicast_range, ipstring_from_list, ipstring_to_list
 import unittest
 import logging
 
@@ -35,22 +35,22 @@ class Test_split_ip_string(unittest.TestCase):
 
 class Test_multicast_ranges(unittest.TestCase):
     def test_multicast(self):
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.0")))
-        self.assertFalse(is_validat_multicast_range(*split_ipstring("127.0.0.1")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.0")))
+        self.assertFalse(is_valid_multicast_range(*split_ipstring("127.0.0.1")))
 
     def test_range(self):
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.0+1")))
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.0+7")))
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.0+15")))
-        self.assertFalse(is_validat_multicast_range(*split_ipstring("225.0.0.0+2")))
-        self.assertFalse(is_validat_multicast_range(*split_ipstring("225.0.0.0+6")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.0+1")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.0+7")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.0+15")))
+        self.assertFalse(is_valid_multicast_range(*split_ipstring("225.0.0.0+2")))
+        self.assertFalse(is_valid_multicast_range(*split_ipstring("225.0.0.0+6")))
 
     def test_block_start(self):
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.0+1")))
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.8+7")))
-        self.assertTrue(is_validat_multicast_range(*split_ipstring("225.0.0.4+3")))
-        self.assertFalse(is_validat_multicast_range(*split_ipstring("225.0.0.4+7")))
-        self.assertFalse(is_validat_multicast_range(*split_ipstring("225.0.0.7+15")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.0+1")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.8+7")))
+        self.assertTrue(is_valid_multicast_range(*split_ipstring("225.0.0.4+3")))
+        self.assertFalse(is_valid_multicast_range(*split_ipstring("225.0.0.4+7")))
+        self.assertFalse(is_valid_multicast_range(*split_ipstring("225.0.0.7+15")))
 
 
 class Test_ipstring_from_list(unittest.TestCase):

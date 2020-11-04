@@ -35,7 +35,7 @@ def split_ipstring(ips):
     return ip, N, port
 
 
-def is_validat_multicast_range(ip, N, port):
+def is_valid_multicast_range(ip, N, port):
     """
     Validates a multicast ranges of format 225.0.0.4, 7, 1234.
         - The base ip has to be a valid multicast address.
