@@ -38,6 +38,21 @@ class DigitiserPacketiserClient(object):
         self._client.start()
         self._capture_started = False
 
+
+        self._sampling_modes = {
+            4096000000: ("virtex7_dk769b", "4.096GHz", 3),
+            4000000000: ("virtex7_dk769b", "4.0GHz", 5),
+            3600000000: ("virtex7_dk769b", "3.6GHz", 7),
+            3520000000: ("virtex7_dk769b", "3.52GHz", 7),
+            3500000000: ("virtex7_dk769b", "3.5GHz", 7),
+            3200000000: ("virtex7_dk769b", "3.2GHz", 9),
+            2600000000: ("virtex7_dk769b", "2.6GHz", 3),
+            2560000000: ("virtex7_dk769b", "2.56GHz", 2)
+            }
+
+
+
+
     def stop(self):
         self._client.stop()
 
@@ -128,21 +143,11 @@ class DigitiserPacketiserClient(object):
         @detail     To allow time for reinitialisation of the packetiser firmware during this call we enforce a 10
                     second sleep before the function returns.
         """
-        valid_modes = {
-            4096000000: ("virtex7_dk769b", "4.096GHz", 3),
-            4000000000: ("virtex7_dk769b", "4.0GHz", 5),
-            3600000000: ("virtex7_dk769b", "3.6GHz", 7),
-            3520000000: ("virtex7_dk769b", "3.52GHz", 7),
-            3500000000: ("virtex7_dk769b", "3.5GHz", 7),
-            3200000000: ("virtex7_dk769b", "3.2GHz", 9),
-            2600000000: ("virtex7_dk769b", "2.6GHz", 3),
-            2560000000: ("virtex7_dk769b", "2.56GHz", 2)
-        }
 
         try:
-            args = valid_modes[int(rate)]
+            args = self._sampling_modes[int(rate)]
         except KeyError as error:
-            pos_freqs = "\n".join(["  - {} Hz ".format(f) for f in valid_modes.iterkeys()])
+            pos_freqs = "\n".join(["  - {} Hz ".format(f) for f in self._sampling_modes.iterkeys()])
             error_msg = "Frequency {} Hz not in possible frequencies:\n{}".format(rate, pos_freqs)
             log.error(error_msg)
             raise DigitiserPacketiserError(error_msg)

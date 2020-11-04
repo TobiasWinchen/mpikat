@@ -182,14 +182,21 @@ class EDDPipeline(AsyncDeviceServer):
     def _config(self, value):
         if not isinstance(value, dict):
             raise RuntimeError("_config has to be a dict!")
-        self.__config = value
-        self._configUpdated()
+
+        if value == self.__config:
+            log.debug("No changes in config, not updating sensor")
+        else:
+            self.__config = value
+            self._configUpdated()
 
     def _configUpdated(self):
         """
-        Actions to take after config has been updated
+        Signals that the config dict has been updated. Seperate method as direct updates of _config items without writing a full dict to _config will noy trigger the _config.setter and have to call this method manually.
         """
-        self._edd_config_sensor.set_value(json.dumps(self._config, indent=4))
+        self._edd_config_sensor.set_value(json.dumps(self.__config, indent=4))
+
+
+
 
     def setup_sensors(self):
         """
@@ -209,7 +216,7 @@ class EDDPipeline(AsyncDeviceServer):
         self._edd_config_sensor = Sensor.string(
             "current-config",
             description="The current configuration for the EDD backend",
-            default=json.dumps(self._default_config, indent=4),
+            default=json.dumps(self._config, indent=4),
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._edd_config_sensor)
 
@@ -433,13 +440,24 @@ class EDDPipeline(AsyncDeviceServer):
         log.debug("Updating configuration: '{}'".format(config_json))
         cfg = yield self._cfgjson2dict(config_json)
         try:
-            self._config = updateConfig(self.__config, cfg)
+            newcfg = updateConfig(self._config, cfg)
+            yield self.check_config(newcfg)
+            self._config = newcfg
             log.debug("Updated config: '{}'".format(self._config))
+        except FailReply as E:
+            log.error("Check config failed!")
+            raise E
         except KeyError as error:
             raise FailReply("Unknown configuration option: {}".format(str(error)))
         except Exception as error:
             raise FailReply("Unknown ERROR: {}".format(str(error)))
 
+    @coroutine
+    def check_config(self, cfg):
+        """
+        Checks a config dictionary for validity. to be implemented in child class. Raise FailReply on invalid setting.
+        """
+        pass
 
     @request()
     @return_reply()

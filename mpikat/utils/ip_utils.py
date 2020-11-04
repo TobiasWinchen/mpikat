@@ -13,7 +13,7 @@ def split_ipstring(ips):
     Split an string of form iprange:port, e.g. 123.0.0.4+7:1234 into baseip,
     total number of ips and port. Raise an exception on invalid ip, port or number.
     """
-    log.debug("Checing string: {}".format(ips))
+    log.debug("Checking string: {}".format(ips))
     try:
         if ":" not in ips:
             R = ips
