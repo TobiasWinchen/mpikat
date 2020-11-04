@@ -30,6 +30,7 @@ from tornado.gen import coroutine, sleep
 from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, FailReply
 
+import time
 import logging
 import json
 import os
@@ -47,6 +48,7 @@ DEFAULT_CONFIG = {
         'sync_time': 0,           # Use specified sync time, current time otherwise
         'nosie_diode_frequency': -1, # Negative for off, 0 for always on
         'force_reconfigure': False,  # If true, we will force a reconfigure on every execution of the packetizer
+        'max_sync_age': 82800,      # max age of sync time [s] before a packetizer is reconfigured (on configure command)
 
         "output_data_streams":
         {
@@ -127,8 +129,10 @@ class DigitizerControllerPipeline(EDDPipeline):
         log.debug("Configuration string: '{}'".format(config_json))
         yield self.set(config_json)
 
-        if self._config['force_reconfigure'] or self.__previous_config != self._config:
-            log.debug("Reconfiguring packetizer - Config changed: {}, Forced: {}".format(self.__previous_config != self._config, self._config['force_reconfigure']))
+        sync_age = time.time() - (yield self._client.get_sync_time())
+
+        if self._config['force_reconfigure'] or self.__previous_config != self._config or sync_age > self._config["max_sync_age"]:
+            log.debug("Reconfiguring packetizer - Config changed: {}; Sync_age : {}; Forced: {}".format(self.__previous_config != self._config, sync_age, self._config['force_reconfigure']))
 
 
             vips = "{}:{}".format(self._config["output_data_streams"]["polarization_0"]["ip"], self._config["output_data_streams"]["polarization_0"]["port"])
