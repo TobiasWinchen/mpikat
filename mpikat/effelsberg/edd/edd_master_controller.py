@@ -44,7 +44,7 @@ from mpikat.utils.process_tools import ManagedProcess, command_watcher
 import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
 import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
 
-log = logging.getLogger("mpikat.effelsberg.edd.EddMAsterController")
+log = logging.getLogger("mpikat.effelsberg.edd.EddMasterController")
 
 
 def value_list(d):
@@ -115,12 +115,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.info("reset-edd-layout requested")
         self.__eddDataStore.updateProducts()
         self.__controller = {}
-        # add a control handle for each product
-        #for productid in self.__eddDataStore.products:
-        #    product = self.__eddDataStore.getProduct(productid)
-        #    # should query the product tog et the right type of controller
-
-        #    self.__controller[productid] = EddServerProductController(self, productid, (product["address"], product["port"]) )
         return ("ok", len(self.__eddDataStore.products))
 
 
@@ -659,6 +653,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
             self.__eddDataStore.updateProducts()
         self.__eddDataStore.flush()
+        self.__controller = {}
         self.__provisioned = None
 
 
