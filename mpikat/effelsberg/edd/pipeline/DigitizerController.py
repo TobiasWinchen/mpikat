@@ -26,7 +26,7 @@ from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 import mpikat.utils.ip_utils as ip_utils
 
-from tornado.gen import coroutine, sleep
+from tornado.gen import coroutine, sleep, Return
 from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, FailReply
 
@@ -46,8 +46,11 @@ DEFAULT_CONFIG = {
         "predecimation_factor" : 1,
         "flip_spectrum": False,
         'sync_time': 0,           # Use specified sync time, current time otherwise
-        'nosie_diode_frequency': -1, # Negative for off, 0 for always on
+        'noise_diode_frequency': -1, # Negative for off, 0 for always on
         'force_reconfigure': False,  # If true, we will force a reconfigure on every execution of the packetizer
+        'skip_packetizer_config': False, # Skips the packetizer config ALWAYS. Overrides force and max sync age.
+        'dummy_configure': False, # Sens a complete dummy configure for provisioning debugging
+
         'max_sync_age': 82800,      # max age of sync time [s] before a packetizer is reconfigured (on configure command)
 
         "output_data_streams":
@@ -62,7 +65,7 @@ DEFAULT_CONFIG = {
                 "sync_time" : None,
                 "samples_per_heap": 4096,
             },
-             "polarization_1" :                         
+             "polarization_1" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.144+3",
@@ -123,6 +126,16 @@ class DigitizerControllerPipeline(EDDPipeline):
         """
         @brief   Configure the Packetizer
         """
+
+        if self._config["dummy_configure"]:
+            log.warning("DUMMY CONFIGURE ENABELD!")
+            for pol in ["polarization_0", "polarization_1"]:
+                self._config["output_data_streams"][pol]["sync_time"] = 23
+                self._config["output_data_streams"][pol]["bit_depth"] = self._config["bit_depth"]
+                self._config["output_data_streams"][pol]["sample_rate"] = self._config["sampling_rate"]
+            self._configUpdated()
+            raise Return
+
         # Do not use configure from packetizer client, as we know the previous
         # config and may thus send this only once.
         log.info("Configuring packetizer")
@@ -138,20 +151,23 @@ class DigitizerControllerPipeline(EDDPipeline):
             vips = "{}:{}".format(self._config["output_data_streams"]["polarization_0"]["ip"], self._config["output_data_streams"]["polarization_0"]["port"])
             hips = "{}:{}".format(self._config["output_data_streams"]["polarization_1"]["ip"], self._config["output_data_streams"]["polarization_1"]["port"])
 
-            yield self._client.capture_stop()
-            yield self._client.set_sampling_rate(self._config["sampling_rate"])
-            yield self._client.set_predecimation(self._config["predecimation_factor"])
-
-            yield self._client.flip_spectrum(self._config["flip_spectrum"])
-            yield self._client.set_bit_width(self._config["bit_depth"])
-
-            yield self._client.set_destinations(vips, hips)
-            if self._config["sync_time"] > 0:
-                yield self._client.synchronize(self._config["sync_time"])
+            if self._config["skip_packetizer_config"]:
+                log.warning('Packetizer configuration manually skipped')
             else:
-                yield self._client.synchronize()
+                yield self._client.capture_stop()
+                yield self._client.set_sampling_rate(self._config["sampling_rate"])
+                yield self._client.set_predecimation(self._config["predecimation_factor"])
 
-            log.debug("Update ouput data streams")
+                yield self._client.flip_spectrum(self._config["flip_spectrum"])
+                yield self._client.set_bit_width(self._config["bit_depth"])
+
+                yield self._client.set_destinations(vips, hips)
+                if self._config["sync_time"] > 0:
+                    yield self._client.synchronize(self._config["sync_time"])
+                else:
+                    yield self._client.synchronize()
+
+            log.debug("Update output data streams")
             sync_time = yield self._client.get_sync_time()
 
             for pol in ["polarization_0", "polarization_1"]:
