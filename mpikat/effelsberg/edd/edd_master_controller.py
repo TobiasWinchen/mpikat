@@ -30,8 +30,9 @@ import tornado
 import signal
 import yaml
 import tempfile
+import networkx as nx
 
-from tornado.gen import Return, coroutine
+from tornado.gen import Return, coroutine, sleep
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Str, Int
 
@@ -44,6 +45,17 @@ import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
 import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
 
 log = logging.getLogger("mpikat.effelsberg.edd.EddMAsterController")
+
+
+def value_list(d):
+    if isinstance(d, dict):
+        return d.values()
+    else:
+        # Ducktyping
+        return d
+
+
+
 
 class EddMasterController(EDDPipeline.EDDPipeline):
     """
@@ -95,7 +107,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         #    # should query the product tog et the right type of controller
 
         #    self.__controller[productid] = EddServerProductController(self, productid, (product["address"], product["port"]) )
-
         return ("ok", len(self.__eddDataStore.products))
 
 
@@ -163,111 +174,103 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             # provisioning
             cfg = self.__sanitizeConfig(cfg)
             self._config = cfg
+            self._installController(self._config)
         else:
             EDDPipeline.EDDPipeline.set(self, cfg)
 
         cfs = json.dumps(self._config, indent=4)
-        log.info("Final configuration:\n" + cfs)
-
-        # ToDo: Check if provisioned
-        if not self.__provisioned:
-            self._installController(self._config)
+        log.debug("Starting configuration:\n" + cfs)
 
 
         # Data streams are only filled in on final configure as they may
-        # require data from the configure command. As example,t he packetizer
-        # dat atream has a sync time that is propagated to other components
+        # require data from the configure command of previous products. As example, the packetizer
+        # data stream has a sync time that is propagated to other components
+        # The components are thus configured following the dependency tree,
+        # which is a directed acyclic graph (DAG)
+        log.debug("Build DAG from config")
+        dag = nx.DiGraph()
+        for product, product_config in self._config['products'].items():
+            log.debug("Adding node: {}".format(product))
+            dag.add_node(product)
+            if "input_data_streams" in product_config:
+                for stream in value_list(product_config["input_data_streams"]):
+                    if not stream["source"]:
+                        log.warning("Ignoring stream without source for DAG from {}".format(product))
+                        continue
+                    source_product = stream["source"].split(":")[0]
+                    if source_product not in self._config['products']:
+                        raise FailReply("{} requires data stream of unknown product {}".format(product, stream["source"]))
+                    log.debug("Connecting: {} -> {}".format(source_product, product))
+                    dag.add_edge(source_product, product)
 
-        # Get output streams from packetizer and configure packetizer
-        log.info("Configuring digitisers/packetisers")
-        for packetizer in self._config['packetizers'].itervalues():
-            if self._config["skip_packetizer_config"]:
-                log.warning("Skipping packetizer configuration as requested in config!")
+        log.debug("Checking for loops in graph")
+        try:
+            cycle = nx.find_cycle(dag)
+            FailReply("Cycle detected in dependency graph: {}".format(cycle))
+        except nx.NetworkXNoCycle:
+            log.debug("No loop on graph found")
+            pass
+        graph = "\n".join(["  . {} --> {}".format(k[0], k[1]) for k in dag.edges()])
+        log.info("Dependency graph of products:\n{}".format(graph))
+
+
+        configure_results= {}
+        configure_futures = []
+
+        @coroutine
+        def process_node(node):
+            """
+            Wrapper to parallelize configuration of nodes. Any Node will wait for its predecessors to be done.
+            """
+            #Wait for all predecessors to be finished
+            log.debug("DAG Processing {}: Waiting for {} predecessors".format(node, len(list(dag.predecessors(node)))))
+            for pre in dag.predecessors(node):
+                log.debug('DAG Processing {}: waiting for {}'.format(node, pre))
+                while not pre in configure_results:
+                    # python3 asyncio coroutines would not run until awaited,
+                    # so we could build the graph up front and then execute it
+                    # without waiting
+                    yield tornado.gen.sleep(0.5)
+                log.debug('DAG Processing {}: Predecessor {} done.'.format(node, pre))
+                if not configure_results[pre]:
+                    log.error('DAG Processing {}: fails due to error in predecessor {}'.format(node, pre))
+                    configure_results[node] = False
+                    raise Return
+                log.debug('DAG Processing {}: Predecessor {} was successfull.'.format(node, pre))
+
+            log.debug("DAG Processing {}: All predecessors done.".format(node))
+            try:
+                log.debug("DAG Processing {}: Checking input data streams for updates.".format(node))
+                if "input_data_streams" in self._config['products'][node]:
+                    log.debug('DAG Processing {}: Update input streams'.format(node))
+                    for stream in value_list(self._config['products'][node]["input_data_streams"]):
+                        product_name, stream_name = stream["source"].split(":")
+                        stream.update(self._config['products'][product_name]["output_data_streams"][stream_name])
+
+                log.debug('DAG Processing {}: Set Final config'.format(node))
+                yield self.__controller[node].set(self._config['products'][node])
+                log.debug('DAG Processing {}: Staring configuration'.format(node))
+                yield self.__controller[node].configure()
+                log.debug("DAG Processing {}: Getting updated config".format(node))
+                cfg = yield self.__controller[node].getConfig()
+                log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
+                self._config["products"][node] = cfg
+
+            except Exception as E:
+                log.error('DAG Processing: {} Exception cought during configuration:\n {}:{}'.format(node, type(E).__name__, E))
+                configure_results[node] = False
             else:
-                yield self.__controller[packetizer["id"]].configure(packetizer)
+                log.debug('DAG Processing: {} Successfully finished configuration'.format(node))
+                configure_results[node] = True
 
-            ofs = dict(format="MPIFR_EDD_Packetizer",
-                        sample_rate=float(packetizer["sampling_rate"]) / int(packetizer["predecimation_factor"]),
-                        bit_depth=packetizer["bit_width"])
-            ofs["sync_time"] = yield self.__controller[packetizer["id"]].get_sync_time()
-            log.info("Sync Time for {}: {}".format(packetizer["id"], ofs["sync_time"]))
-
-            key = packetizer["id"] + ":" + "v_polarization"
-            ofs["ip"] = packetizer["v_destinations"].split(':')[0]
-            ofs["port"] = packetizer["v_destinations"].split(':')[1]
-            self.__eddDataStore.addDataStream(key, ofs)
-
-            key = packetizer["id"] + ":" + "h_polarization"
-            ofs["ip"] = packetizer["h_destinations"].split(':')[0]
-            ofs["port"] = packetizer["h_destinations"].split(':')[1]
-            self.__eddDataStore.addDataStream(key, ofs)
-            yield self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
-
-        log.debug("Identify additional output streams")
-        # Get output streams from products
-        for product in self._config['products'].itervalues():
-
-            if not "output_data_streams" in product:
-                continue
-
-            for k, i in product["output_data_streams"].iteritems():
-                # look up data stream in storage
-                dataStream = self.__eddDataStore.getDataFormatDefinition(i['format'])
-                dataStream.update(i)
-                key = "{}:{}".format(product['id'], k)
-                if 'ip' in i:
-                    pass
-                # ToDo: mark multicast adress as used xyz.mark_used(i['ip'])
-                else:
-                # ToDo: get MC address automatically if not set
-                    raise NotImplementedError("Missing ip statement! Automatic assignment of IPs not implemented yet!")
-                self.__eddDataStore.addDataStream(key, i)
-
-        log.debug("Connect data streams with high level description")
-        for product in self._config['products'].itervalues():
-            log.debug("checking product: {}".format(product["id"]))
-            if not "input_data_streams" in product:
-                log.warning("Product: {} without input data streams".format(product['id']))
-                continue
-            counter = 0
-            for k in product["input_data_streams"]:
-                if isinstance(product["input_data_streams"], dict):
-                    log.debug("input stream of type dict, k = {}".format(k))
-                    inputStream = product["input_data_streams"][k]
-                elif isinstance(product["input_data_streams"], list):
-                    inputStream = k
-                    k = counter
-                    counter += 1
-                    log.debug("input stream of type list, k = {}".format(k))
-                else:
-                    raise RuntimeError("Input streams has to be dict or list, got: {}!".format(type(product["input_data_streams"])))
-
-                datastream = self.__eddDataStore.getDataFormatDefinition(inputStream['format'])
-                datastream.update(inputStream)
-                if not "source" in inputStream:
-                    log.debug("Source not definied for input stream {} of {} - no lookup but assuming manual definition!".format(k, product['id']))
-                    continue
-                s = inputStream["source"]
-
-                if not self.__eddDataStore.hasDataStream(s):
-                    log.error("Unknown data stream {}. Corresponding input stream: {}".format(s, inputStream))
-                    raise RuntimeError("Unknown data stream {} !".format(s))
-
-                log.debug("Updating {} of {} - with {}".format(k, product['id'], s))
-                datastream.update(self.__eddDataStore.getDataStream(s))
-                product["input_data_streams"][k] = datastream
-
-        log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
-        log.info("Configuring products")
-        log.debug("Sending configure to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
-        futures = []
-        for product in self._config["products"].itervalues():
-            #inject global data store values into product configuration
-            product["data_store"] = self._config["data_store"]
-            futures.append(self.__controller[product['id']].configure(product))
-        yield futures
-
-        self._edd_config_sensor.set_value(json.dumps(self._config))
+        log.debug("Creating processing futures")
+        configure_futures = [process_node(node) for node in dag.nodes()]
+        yield configure_futures
+        self._configUpdated()
+        log.debug("Final configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
+        failed_prcts = [k for k in configure_results if not configure_results[k]]
+        if failed_prcts:
+            raise FailReply("Failed products: {}".format(",".join(failed_prcts)))
         log.info("Successfully configured EDD")
         raise Return("Successfully configured EDD")
 
@@ -283,7 +286,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         for cid, controller in self.__controller.iteritems():
             futures.append(controller.deconfigure())
         yield futures
-        #self._update_products_sensor()
 
 
     @coroutine
@@ -398,7 +400,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     @return_reply()
     def request_list_provisions(self, req):
         """
-        @brief List all availbale provision descriptions 
+        @brief List all availbale provision descriptions
 
         """
         @coroutine
@@ -408,7 +410,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 yml_files = [f for f in all_files if f.endswith('.yml')]
                 l = [" - {}".format(l[:-4]) for l in yml_files if l[:-4] + '.json' in all_files]
                 req.reply("ok", "\nAvailable provision descriptions:\n" +"\n".join(l))
-
 
             except FailReply as fr:
                 log.error(str(fr))
@@ -492,7 +493,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         except Exception as E:
             raise FailReply("Error in provisioning thrown by ansible {}".format(E))
 
-
         self.__provisioned = playbook_file
 
         try:
@@ -504,23 +504,26 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         self.__eddDataStore.updateProducts()
         basic_config = self.__sanitizeConfig(basic_config)
+
         self._installController(basic_config)
+
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
         self._config = self._default_config.copy()
-        self._config["products"] = {}
-        self._config["packetizers"] = basic_config['packetizers']
 
-        for product in basic_config['products'].itervalues():
+        self._config["products"] = {}
+#        self._config["packetizers"] = basic_config['packetizers']
+
+        if isinstance(basic_config['products'], dict):
+            log.warning("Configuration uses dictionary as product list -  should be list")
+            product_list =  basic_config['products'].values()
+        else:
+            product_list =  basic_config['products']
+
+        for product in product_list:
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
-            if not isinstance(controller, EddServerProductController):
-                # ToDo: unfify interface of DigitiserPacketiserClient and EDD Pipeline,
-                # they should be identical. Here the DigitiserPacketiserClient
-                # should mimick the getConfig and translate it as the actual
-                # request is not there
-                continue
 
             log.debug("Checking basic config {}".format(json.dumps(product, indent=4)))
             yield controller.set(product)
@@ -641,7 +644,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     @return_reply()
     def request_provision_update(self, req, repository=""):
         """
-        @brief   Clones or pulls updates for the git repository 
+        @brief   Clones or pulls updates for the git repository
 
         """
         @coroutine
@@ -663,7 +666,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     @coroutine
     def provision_update(self, repository=""):
         """
-        @brief   Clones or pulls updates for the git repository 
+        @brief   Clones or pulls updates for the git repository
         """
 
         if not os.path.isdir(self.__edd_ansible_git_repository_folder):
