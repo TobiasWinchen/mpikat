@@ -88,7 +88,7 @@ class DigitizerControllerPipeline(EDDPipeline):
            @param device is the control ip of the board
         """
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
-        log.info('Connecting to skarab @ {}:{}'.format(device_ip, device_port))
+        log.info('Connecting to packetizer @ {}:{}'.format(device_ip, device_port))
         self._client = DigitiserPacketiserClient(device_ip, device_port)
 
         # We do not know the initial state of the packetizr before we take
