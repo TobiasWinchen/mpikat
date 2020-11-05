@@ -68,7 +68,6 @@ DEFAULT_CONFIG = {
     "tempo2_telescope_name": "Effelsberg",
     "merge_application": "edd_merge",
     "npart": 2,
-    "sync_datastream": "TO BE REMOVED",
     "input_data_streams":
     [
         {
@@ -79,7 +78,7 @@ DEFAULT_CONFIG = {
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
-            "sync_time": 1599749491.0,
+            "sync_time": 0,
             "samples_per_heap": 4096,
             "band_flip": 1,
             "predecimation_factor": 2,
