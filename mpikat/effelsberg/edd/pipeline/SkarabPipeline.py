@@ -26,7 +26,7 @@ from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 from mpikat.effelsberg.edd.edd_skarab_client import SkarabChannelizerClient
 import mpikat.utils.ip_utils as ip_utils
 
-from tornado.gen import coroutine, sleep
+from tornado.gen import coroutine, sleep, Return
 from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, FailReply
 
@@ -74,6 +74,7 @@ DEFAULT_CONFIG = {
 
         "log_level": "debug",
         "force_program": False,                 # Force reprogramming of with new firmware version
+        'skip_device_config': False,            # Skips the skarab config ALWAYS. Overrides force
         "firmware_directory": os.path.join(os.path.dirname(os.path.realpath(__file__)), "skarab_firmware"),
         "firmware": "s_ubb_64ch_coddh_2020-09-21_1540.fpg",
         "channels_per_group": 8,                # Channels per multicast group in the fpga output
@@ -105,13 +106,6 @@ class SkarabPipeline(EDDPipeline):
         self.__periodic_callback = PeriodicCallback(self._check_fpga_sensors, 1000)
         self.__periodic_callback.start()
 
-#    @coroutine
-#    def start(self):
-#        log.debug("Starting")
-#        super(SkarabPipeline, self).start()
-#        log.debug("Starting")
-#        log.debug("Starting")
-#        log.debug("Starting")
 
     @coroutine
     def _check_fpga_sensors(self):
@@ -169,21 +163,6 @@ class SkarabPipeline(EDDPipeline):
         log.debug("Configuration string: '{}'".format(config_json))
         yield self.set(config_json)
 
-        cfs = json.dumps(self._config, indent=4)
-        log.info("Final configuration:\n" + cfs)
-
-        log.debug("Setting firmware string")
-        self._client.setFirmware(os.path.join(self._config["firmware_directory"], self._config['firmware']))
-        log.debug("Connecting to client")
-        self._client.connect()
-        if self._config['force_program']:
-            log.debug("Forcing reprogramming")
-            yield self._client.program()
-
-        yield self._client.initialize()
-
-        yield self._client.configure_inputs(self._config["input_data_streams"]["polarization_0"]["ip"], self._config["input_data_streams"]["polarization_1"]["ip"], int(self._config["input_data_streams"]["polarization_0"]["port"]))
-
         # Convert arbitrary output parts to input list
         iplist = []
         for l in self._config["output_data_streams"].itervalues():
@@ -196,6 +175,31 @@ class SkarabPipeline(EDDPipeline):
         if len(port) != 1:
             raise FailReply("Output data streams have to stream to same port")
 
+        # update sync tim based on input
+        for l in self._config["output_data_streams"].itervalues():
+            l["sync_time"] = self._config["input_data_streams"]["polarization_0"]["sync_time"]
+        self._configUpdated()
+
+        cfs = json.dumps(self._config, indent=4)
+        log.info("Final configuration:\n" + cfs)
+
+        if self._config["skip_device_config"]:
+            log.warning("Skipping device configuration because debug mode is active!")
+            raise Return
+
+
+        log.debug("Setting firmware string")
+        self._client.setFirmware(os.path.join(self._config["firmware_directory"], self._config['firmware']))
+        log.debug("Connecting to client")
+        self._client.connect()
+
+        if self._config['force_program']:
+            log.debug("Forcing reprogramming")
+            yield self._client.program()
+
+        yield self._client.initialize()
+
+        yield self._client.configure_inputs(self._config["input_data_streams"]["polarization_0"]["ip"], self._config["input_data_streams"]["polarization_1"]["ip"], int(self._config["input_data_streams"]["polarization_0"]["port"]))
 
         yield self._client.configure_output(ip, int(port.pop()), N, self._config["channels_per_group"], self._config["board_id"] )
 

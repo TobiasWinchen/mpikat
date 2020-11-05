@@ -68,7 +68,7 @@ DEFAULT_CONFIG = {
     "tempo2_telescope_name": "Effelsberg",
     "merge_application": "edd_merge",
     "npart": 2,
-    "sync_datastream": "focus_cabin_packetizer:h_polarization",
+    "sync_datastream": "TO BE REMOVED",
     "input_data_streams":
     [
         {
@@ -470,8 +470,7 @@ class EddPulsarPipeline(EDDPipeline):
         # config to all pipelines
         self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
 
-        log.warning("USING SYNC EPOCH FROM SYNC DATASTREAM OPTION. THIS IS A HACK AND SHOULD BE REMOVED!")
-        self.sync_epoch = self.__eddDataStore.getDataStream(self._config['sync_datastream'])['sync_time']
+        self.sync_epoch = self._config['input_data_streams'][0]['sync_time']
         log.info("sync_epoch = {}".format(self.sync_epoch))
 
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
