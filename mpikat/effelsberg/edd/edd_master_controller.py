@@ -88,6 +88,20 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         self.__provisioned = None
 
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        EDDPipeline.EDDPipeline.setup_sensors(self)
+
+        self._configuration_graph = Sensor.string(
+            "configuration_graph",
+            description="Graph of configuration",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._configuration_graph)
+
+
+
 
     @request()
     @return_reply(Int())
@@ -210,9 +224,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         except nx.NetworkXNoCycle:
             log.debug("No loop on graph found")
             pass
-        graph = "\n".join(["  . {} --> {}".format(k[0], k[1]) for k in dag.edges()])
+        graph = "\n".join(["  {} --> {}".format(k[0], k[1]) for k in dag.edges()])
         log.info("Dependency graph of products:\n{}".format(graph))
-
+        self._configuration_graph.set_value(graph)
 
         configure_results= {}
         configure_futures = []
@@ -271,6 +285,13 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         failed_prcts = [k for k in configure_results if not configure_results[k]]
         if failed_prcts:
             raise FailReply("Failed products: {}".format(",".join(failed_prcts)))
+        log.info("Updating data streams in database")
+        for product in self._config["products"]:
+            if "output_data_streams" in product:
+                for stream in value_list(product["output_data_streams"]):
+                    key = "{}:{}".format(product, stream)
+                    self.__eddDataStore.addDataStream(key, ofs)
+
         log.info("Successfully configured EDD")
         raise Return("Successfully configured EDD")
 
@@ -286,6 +307,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         for cid, controller in self.__controller.iteritems():
             futures.append(controller.deconfigure())
         yield futures
+        self._configuration_graph.set_value("")
 
 
     @coroutine
