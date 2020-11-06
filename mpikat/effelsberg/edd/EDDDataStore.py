@@ -2,7 +2,24 @@ import redis
 import json
 import logging
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("mpikat.effelsberg.edd.EDDDataStore")
+
+
+class redisfail2warn(object):
+    """
+    Context manager that turns redis connection errors into warnings.
+    """
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, traceback):
+        if isinstance(exc_val, redis.exceptions.ConnectionError):
+            log.warning("Redis connection error\n\n{}\n\n - request ignored.".format(exc_val))
+            return True
+        else:
+            return False
+
+
 
 
 class EDDDataStore:
@@ -30,7 +47,8 @@ class EDDDataStore:
 
         self.__dataBases = [self._ansible, self._products, self._dataStreams, self._edd_static_data, self._telescopeMetaData]
         for d in self.__dataBases:
-            d.ping()
+            with redisfail2warn():
+                d.ping()
 
 
     def flush(self):
@@ -39,51 +57,54 @@ class EDDDataStore:
         """
         log.debug("Flushing all databses")
         for d in self.__dataBases:
-            d.flushdb()
+            with redisfail2warn():
+                d.flushdb()
 
 
     def updateProducts(self):
         """
         @brief Fill the producers database based on the information in the ansible database
         """
-        self._products.flushdb()
-        for k in self._ansible.keys():
-            if not k.startswith('facts'):
-                log.debug("Ignoring: {}".format(k))
-                continue
-            log.debug("Check facts: {}".format(k))
+        with redisfail2warn():
+            self._products.flushdb()
+            for k in self._ansible.keys():
+                if not k.startswith('facts'):
+                    log.debug("Ignoring: {}".format(k))
+                    continue
+                log.debug("Check facts: {}".format(k))
 
-            facts = json.loads(self._ansible[k])
+                facts = json.loads(self._ansible[k])
 
-            if 'ansible_default_ipv4' not in facts:
-                log.debug("Insufficient facts for {} - possibly nor products".format(k))
-                continue
-            ip = facts["ansible_default_ipv4"]
+                if 'ansible_default_ipv4' not in facts:
+                    log.debug("Insufficient facts for {} - possibly nor products".format(k))
+                    continue
+                ip = facts["ansible_default_ipv4"]
 
-            if 'edd_container' not in facts or not isinstance(facts['edd_container'], dict):
-                log.debug("No products found for: {}".format(k))
-                continue
+                if 'edd_container' not in facts or not isinstance(facts['edd_container'], dict):
+                    log.debug("No products found for: {}".format(k))
+                    continue
 
-            for p in facts['edd_container']:
-                log.debug("  Found {}".format(p))
-                facts['edd_container'][p]['hostname'] = facts['ansible_hostname']
-                facts['edd_container'][p]['address'] = facts["ansible_default_ipv4"]['address']
-                self._products[p] = json.dumps(facts['edd_container'][p])
+                for p in facts['edd_container']:
+                    log.debug("  Found {}".format(p))
+                    facts['edd_container'][p]['hostname'] = facts['ansible_hostname']
+                    facts['edd_container'][p]['address'] = facts["ansible_default_ipv4"]['address']
+                    self._products[p] = json.dumps(facts['edd_container'][p])
 
 
     def addDataStream(self, streamid, streamdescription):
         """
         @brief Add a new data stream to the store. Description as dict.
         """
-        if streamid in self._dataStreams:
-            nd = json.dumps(streamdescription)
-            if nd == self._dataStreams[streamid]:
-                log.warning("Duplicate output streams: {} defined but with same description".format(streamid))
-                returnmpikat/effelsberg/edd/EDDDataStore.py 
-            else:
-                log.warning("Duplicate output stream {} defined with conflicting description!\n Existing description: {}\n New description: {}".format(streamid, self._dataStreams[streamid], nd))
-                raise RuntimeError("Invalid configuration")
-        self._dataStreams[streamid] = json.dumps(streamdescription)
+        with redisfail2warn():
+            if streamid in self._dataStreams:
+                nd = json.dumps(streamdescription)
+                if nd == self._dataStreams[streamid]:
+                    log.warning("Duplicate output streams: {} defined but with same description".format(streamid))
+                    returnmpikat/effelsberg/edd/EDDDataStore.py 
+                else:
+                    log.warning("Duplicate output stream {} defined with conflicting description!\n Existing description: {}\n New description: {}".format(streamid, self._dataStreams[streamid], nd))
+                    raise RuntimeError("Invalid configuration")
+            self._dataStreams[streamid] = json.dumps(streamdescription)
 
 
     def getDataStream(self, streamid):
@@ -119,11 +140,12 @@ class EDDDataStore:
         """
         @brief Adds a new data format description dict to store.
         """
-        key = "DataFormats:{}".format(format_name)
-        if isinstance(params, dict):
-            params = json.dumps(params)
-        log.debug("Add data format definition {} - {}".format(key, params))
-        self._edd_static_data[key] = params
+        with redisfail2warn():
+            key = "DataFormats:{}".format(format_name)
+            if isinstance(params, dict):
+                params = json.dumps(params)
+            log.debug("Add data format definition {} - {}".format(key, params))
+            self._edd_static_data[key] = params
 
     def hasDataFormatDefinition(self, format_name):
         """
@@ -145,19 +167,22 @@ class EDDDataStore:
 
 
     def addTelescopeDataItem(self, key, pars):
-        pars['value'] = pars['default']
-        try:
-            self._telescopeMetaData.hmset(key, pars)
-        except Exception as E:
-            log.error("Error setting {}".format(key))
+        with redisfail2warn():
+            pars['value'] = pars['default']
+            try:
+                self._telescopeMetaData.hmset(key, pars)
+            except Exception as E:
+                log.error("Error setting {}".format(key))
 
     def setTelescopeDataItem(self, key, value):
-        self._telescopeMetaData.hset(key, "value", value)
+        with redisfail2warn():
+            self._telescopeMetaData.hset(key, "value", value)
 
     def getTelescopeDataItem(self, key):
         return self._telescopeMetaData.hget(key, "value")
 
 if __name__ == "__main__":
-    store = EDDDataStore("localhost")
+    logging.basicConfig()
+    store = EDDDataStore("foo")
     store.setTelescopeDataItem("foo", "bar")
     print (store.getTelescopeDataItem("foo"))
