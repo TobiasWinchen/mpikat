@@ -71,32 +71,18 @@ DEFAULT_CONFIG = {
     "input_data_streams":
     [
         {
-            "source": "",
-            "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
             "ip": "225.0.0.180+3",
             "port": "7148",
             "bit_depth": 8,
-            "sample_rate": 3200000000,
             "sync_time": 0,
-            "samples_per_heap": 4096,
-            "band_flip": 1,
-            "predecimation_factor": 2,
-            "central_freq": 1200
         },
         {
-            "source": "",
-            "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
             "ip": "225.0.0.184+3",
             "port": "7148",
             "bit_depth": 8,
-            "sample_rate": 3200000000,
             "sync_time": 1599749491.0,
-            "samples_per_heap": 4096,
-            "band_flip": 1,
-            "predecimation_factor": 2,
-            "central_freq": 1200,
         }
     ],
     "dada_header_params":
@@ -547,7 +533,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("  - mc interface: {}".format(header['interface']))
         header["sync_time"] = self.sync_epoch
         log.debug("  - sync time: {}".format(header['sync_time']))
-        header["sample_clock"] = float(self._config['input_data_streams'][0]["sample_rate"]) # adjsutment for the predecimation factor is done in the amster controller
+        header["sample_clock"] = float(self._config['input_data_streams'][0]["bandwidth"] * 2) # adjsutment for the predecimation factor is done in the amster controller
         log.debug("  - sample_clock: {}".format(header['sample_clock']))
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format(scannum, subscannum)

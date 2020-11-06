@@ -60,23 +60,14 @@ DEFAULT_CONFIG = {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.140+3",
                 "port": "7148",
-                "bit_depth" : None,
-                "sample_rate" : None,
-                "sync_time" : None,
-                "samples_per_heap": 4096,
             },
              "polarization_1" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.144+3",
                 "port": "7148",
-                "bit_depth" : None,
-                "sample_rate" : None,
-                "sync_time" : None,
-                "samples_per_heap": 4096,
             }
-        },
-        "log_level": "debug",
+        }
     }
 
 
@@ -132,7 +123,7 @@ class DigitizerControllerPipeline(EDDPipeline):
             for pol in ["polarization_0", "polarization_1"]:
                 self._config["output_data_streams"][pol]["sync_time"] = 23
                 self._config["output_data_streams"][pol]["bit_depth"] = self._config["bit_depth"]
-                self._config["output_data_streams"][pol]["sample_rate"] = self._config["sampling_rate"]
+                self._config["output_data_streams"][pol]["bandwidth"] = self._config["sampling_rate"] / self._config['predecimation_factor']
             self._configUpdated()
             raise Return
 
@@ -173,7 +164,7 @@ class DigitizerControllerPipeline(EDDPipeline):
             for pol in ["polarization_0", "polarization_1"]:
                 self._config["output_data_streams"][pol]["sync_time"] = sync_time
                 self._config["output_data_streams"][pol]["bit_depth"] = self._config["bit_depth"]
-                self._config["output_data_streams"][pol]["sample_rate"] = self._config["sampling_rate"]
+                self._config["output_data_streams"][pol]["bandwidth"] = self._config["sampling_rate"] / self._config['predecimation_factor']
             self._configUpdated()
             self.__previous_config = self._config
         else:

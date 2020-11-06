@@ -20,6 +20,33 @@ class redisfail2warn(object):
             return False
 
 
+# Data Formats
+# Global specified static data formats stored locally to always
+# provide a lookup of the values in the code. The values are written to the
+# online db to prpovide he information, but updates will not be looked up.
+
+data_formats = {
+        "GatedSpectrometer:1": {
+            "ip": "",
+            "port": "",
+            "description": "Spead stream of integrated spectra."
+        },
+        "MPIFR_EDD_Packetizer:1": {
+            "ip": "",
+            "port": "",
+            "bit_depth" : 0,
+            "bandwidth" : 0,
+            "sync_time" : 0,
+            "band_flip": False,
+            "central_freq": 0,
+
+            "samples_per_heap": 4096,
+            "description": "Spead stream of time-domain packetizer data as in EDD ICD."
+        }
+    }
+
+
+
 
 
 class EDDDataStore:
@@ -99,8 +126,8 @@ class EDDDataStore:
             if streamid in self._dataStreams:
                 nd = json.dumps(streamdescription)
                 if nd == self._dataStreams[streamid]:
-                    log.warning("Duplicate output streams: {} defined but with same description".format(streamid))
-                    returnmpikat/effelsberg/edd/EDDDataStore.py 
+                    log.debug("Duplicate output streams: {} defined but with same description".format(streamid))
+                    return
                 else:
                     log.warning("Duplicate output stream {} defined with conflicting description!\n Existing description: {}\n New description: {}".format(streamid, self._dataStreams[streamid], nd))
                     raise RuntimeError("Invalid configuration")
@@ -136,14 +163,17 @@ class EDDDataStore:
         """
         return streamid in self._dataStreams
 
-    def addDataFormatDefinition(self, format_name, params):
+    def addDataFormatDefinition(self, format_definition):
         """
         @brief Adds a new data format description dict to store.
+               All formats have the formatname as key.
         """
         with redisfail2warn():
-            key = "DataFormats:{}".format(format_name)
-            if isinstance(params, dict):
-                params = json.dumps(params)
+            key = "DataFormats:{}".format(format_definition["format"])
+            if key in self._edd_static_data:
+                log.debug("Data format already defined.")
+                pass
+            params = json.dumps(format_description)
             log.debug("Add data format definition {} - {}".format(key, params))
             self._edd_static_data[key] = params
 

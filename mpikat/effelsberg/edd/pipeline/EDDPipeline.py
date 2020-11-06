@@ -27,6 +27,9 @@ from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 import mpikat.utils.numa as numa
 
+import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
+
+
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Int, Str
 
@@ -61,6 +64,16 @@ def updateConfig(oldo, new):
                 log.warning("Update option {} with different type! Old value(type) {}({}), new {}({}) ".format(k, old[k], type(old[k]), new[k], type(new[k])))
             old[k] = new[k]
     return old
+
+
+def value_list(d):
+    if isinstance(d, dict):
+        return d.values()
+    else:
+        # Ducktyping
+        return d
+
+
 
 
 
@@ -144,15 +157,37 @@ class EDDPipeline(AsyncDeviceServer):
 
     def __init__(self, ip, port, default_config={}):
         """
-        @brief Initialize the pipeline. Subclasses are required to provide their default config dict.
+        @brief Initialize the pipeline. Subclasses are required to provide their default config dict and specify
+                the data formats definied by the class, if any.
         """
         self.callbacks = set()
         self._state = "idle"
         self.previous_state = "unprovisioned"
         self._sensors = []
         # inject data store dat into all default configs.
-        if "data_store" not in default_config:
-            default_config["data_store"] = dict(ip="localhost", port=6379)
+        default_config.setdefault("data_store", dict(ip="localhost", port=6379))
+        default_config.setdefault("id", "Unspecified")
+        default_config.setdefault("type", "Unspecified")
+        default_config.setdefault("input_data_streams", [])
+        default_config.setdefault("output_data_streams", [])
+
+        for stream in value_list(default_config['input_data_streams']):
+            if not stream['format']:
+                log.warning("Input stream without format definition!")
+                continue
+            for key, value in EDDDataStore.data_formats[stream['format']].items():
+                stream.setdefault(key, value)
+        for stream in value_list(default_config['output_data_streams']):
+            if not stream['format']:
+                log.warning("Output stream without format definition!")
+                continue
+            for key, value in EDDDataStore.data_formats[stream['format']].items():
+                stream.setdefault(key, value)
+
+
+
+
+
 
         self.__config = default_config.copy()
         self._default_config = default_config
@@ -432,7 +467,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def set(self, config_json):
         """
-        @brief      Add the config_json to the current config
+        @brief      Add the config_json to the current config. Input / output data streams will be filled with default values if not provided.
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -702,9 +737,19 @@ class EDDPipeline(AsyncDeviceServer):
 
 
     @coroutine
-    def populate_data_store(self, host, port):
+    def populate_data_store(self, host=None, port=None):
         """@brief Populate the data store"""
-        log.debug("Populate data store @ {}:{}".format(host, port))
+        if host == None:
+            log.debug("No host provided. Use value from current config.")
+            host = self.config["data_store"]["ip"]
+        if port == None:
+            log.debug("No portprovided. Use value from current config.")
+            port = self.config["data_store"]["port"]
+        log.debug("Register pipeline in data store @ {}:{}".format(host, port))
+        dataStore = EDDDataStore.EDDDataStore(host, port)
+
+
+
         pass
 
 

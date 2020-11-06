@@ -44,27 +44,17 @@ DEFAULT_CONFIG = {
         {
             "polarization_0" :
             {
-                "source": "",                               # name of the source for automatic setting of paramters
-                "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
                 "ip": "225.0.0.140+3",
                 "port": "7148",
                 "bit_depth" : 12,
-                "sample_rate" : 2600000000,
-                "sync_time" : 1581164788.0,
-                "samples_per_heap": 4096,                     # this needs to be consistent with the mkrecv configuration
             },
              "polarization_1" :
             {
-                "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
-                "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.144+3",
                 "port": "7148",
                 "bit_depth" : 12,
-                "sample_rate" : 2600000000,
-                "sync_time" : 1581164788.0,
-                "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
             }
         },
         "output_data_streams":                              # Filled programatically, see below
@@ -169,7 +159,7 @@ class SkarabPipeline(EDDPipeline):
             iplist.extend(ip_utils.ipstring_to_list(l["ip"]))
 
         output_string = ip_utils.ipstring_from_list(iplist)
-        ip, N, port = ip_utils.split_ipstring(output_string)
+        output_ip, Noutput_streams, port = ip_utils.split_ipstring(output_string)
 
         port = set([l["port"] for l in self._config["output_data_streams"].itervalues()])
         if len(port) != 1:
@@ -201,7 +191,7 @@ class SkarabPipeline(EDDPipeline):
 
         yield self._client.configure_inputs(self._config["input_data_streams"]["polarization_0"]["ip"], self._config["input_data_streams"]["polarization_1"]["ip"], int(self._config["input_data_streams"]["polarization_0"]["port"]))
 
-        yield self._client.configure_output(ip, int(port.pop()), N, self._config["channels_per_group"], self._config["board_id"] )
+        yield self._client.configure_output(output_ip, int(port.pop()), Noutput_streams, self._config["channels_per_group"], self._config["board_id"] )
 
         yield   self._client.configure_quantization_factor(self._config["initial_quantization_factor"])
         yield   self._client.configure_fft_shift(self._config["initial_fft_shift"])

@@ -42,22 +42,16 @@ from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProduct
 
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, value_list
 import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
 
 log = logging.getLogger("mpikat.effelsberg.edd.EddMasterController")
 
 
-def value_list(d):
-    if isinstance(d, dict):
-        return d.values()
-    else:
-        # Ducktyping
-        return d
 
 
 
-
-class EddMasterController(EDDPipeline.EDDPipeline):
+class EddMasterController(EDDPipeline):
     """
     The main KATCP interface for the EDD backend
     """
@@ -77,7 +71,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                               repository to be used for provisioning
         @params inventory to use for ansible
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port), "skip_packetizer_config":False})
+        EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port), "skip_packetizer_config":False})
 
         self.__controller = {}
         self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
@@ -92,7 +86,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         @brief Setup monitoring sensors
         """
-        EDDPipeline.EDDPipeline.setup_sensors(self)
+        EDDPipeline.setup_sensors(self)
 
         self._configuration_graph = Sensor.string(
             "configuration_graph",
@@ -145,7 +139,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             log.exception(E)
             raise FailReply("Error processing setting {}".format(E))
         try:
-            EDDPipeline.EDDPipeline.set(self, fixed_cfg)
+            EDDPipeline.set(self, fixed_cfg)
         except Exception as E:
             log.error("Error processing setting in pipeline")
             log.exception(E)
@@ -184,7 +178,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             self._config = cfg
             self._installController(self._config)
         else:
-            EDDPipeline.EDDPipeline.set(self, cfg)
+            EDDPipeline.set(self, cfg)
 
         cfs = json.dumps(self._config, indent=4)
         log.debug("Starting configuration:\n" + cfs)
