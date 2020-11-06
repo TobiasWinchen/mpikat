@@ -41,8 +41,7 @@ from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
 
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
-import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, value_list
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, value_list, getArgumentParser, setup_logger, launchPipelineServer
 import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
 
 log = logging.getLogger("mpikat.effelsberg.edd.EddMasterController")
@@ -697,7 +696,7 @@ class EddMasterController(EDDPipeline):
 
 
 if __name__ == "__main__":
-    parser = EDDPipeline.getArgumentParser()
+    parser = getArgumentParser()
     parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
                       help='The ip for the redis server')
     parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
@@ -708,9 +707,9 @@ if __name__ == "__main__":
     parser.add_argument('--edd_ansible_inventory', dest='inventory', type=str,
             default="effelsberg", help='The inventory to use with the ansible setup')
     args = parser.parse_args()
-    EDDPipeline.setup_logger(args)
+    setup_logger(args)
 
     server = EddMasterController(
         args.host, args.port,
         args.redis_ip, args.redis_port, args.edd_ansible_git_repository_folder, args.inventory)
-    EDDPipeline.launchPipelineServer(server, args)
+    launchPipelineServer(server, args)

@@ -172,6 +172,7 @@ class EDDPipeline(AsyncDeviceServer):
         default_config.setdefault("output_data_streams", [])
 
         for stream in value_list(default_config['input_data_streams']):
+            stream.setdefault("source", "")
             if not stream['format']:
                 log.warning("Input stream without format definition!")
                 continue
