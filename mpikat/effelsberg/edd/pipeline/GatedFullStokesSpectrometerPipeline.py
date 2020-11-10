@@ -603,19 +603,6 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
         self._dada_buffers = []
 
-    @coroutine
-    def populate_data_store(self, host, port):
-        """@brief Populate the data store"""
-        log.debug("Populate data store @ {}:{}".format(host, port))
-        dataStore =  EDDDataStore(host, port)
-        log.debug("Adding output formats to known data formats")
-
-        descr = {"description":"Self descriped spead stream of sepctrometer data with noise diode on/off",
-                "ip": None,
-                "port": None,
-                }
-        dataStore.addDataFormatDefinition("GatedSpectrometer:1", descr)
-
 
 
 if __name__ == "__main__":

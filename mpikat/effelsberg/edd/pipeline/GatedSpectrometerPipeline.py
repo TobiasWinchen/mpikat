@@ -525,7 +525,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     else:
                         idx1modulo = self._config['idx1_modulo']
 
-                    cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
+                    cmd = "taskset -c {physcpu} mkrecv_v4 --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
                     --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
                     --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1modulo=idx1modulo,
                             **cfg )
@@ -605,19 +605,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
             yield command_watcher(cmd)
 
         self._dada_buffers = []
-
-    @coroutine
-    def populate_data_store(self, host, port):
-        """@brief Populate the data store"""
-        log.debug("Populate data store @ {}:{}".format(host, port))
-        dataStore =  EDDDataStore(host, port)
-        log.debug("Adding output formats to known data formats")
-
-        descr = {"description":"Self descriped spead stream of sepctrometer data with noise diode on/off",
-                "ip": None,
-                "port": None,
-                }
-        dataStore.addDataFormatDefinition("GatedSpectrometer:1", descr)
 
 
 
