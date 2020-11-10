@@ -80,6 +80,7 @@ class EddMasterController(EDDPipeline):
             log.warning("{} is not a readable directory".format(self.__edd_ansible_git_repository_folder))
 
         self.__provisioned = None
+        self.__controller = {}
 
     def setup_sensors(self):
         """
@@ -92,23 +93,6 @@ class EddMasterController(EDDPipeline):
             description="Graph of configuration",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._configuration_graph)
-
-
-
-
-    @request()
-    @return_reply(Int())
-    def request_reset_edd_layout(self, req):
-        """
-        @brief   Reset the edd layout - after a change of the edd layout via ansible, the iformation about the available products is updated
-
-        @detail  Reread the layout of the edd setup from the ansible data set.
-        @return  katcp reply object [[[ !product-list ok | (fail [error description]) <number of configured producers> ]]
-        """
-        log.info("reset-edd-layout requested")
-        self.__eddDataStore.updateProducts()
-        self.__controller = {}
-        return ("ok", len(self.__eddDataStore.products))
 
 
     @coroutine
@@ -158,10 +142,9 @@ class EddMasterController(EDDPipeline):
         """
         log.info("Configuring EDD backend for processing")
 
-        self.__eddDataStore.updateProducts()
-        log.info("Resetting data streams")
+        #log.info("Resetting data streams")
         #TODo: INterface? Decide if this is always done
-        self.__eddDataStore._dataStreams.flushdb()
+        #self.__eddDataStore._dataStreams.flushdb()
         log.debug("Received configuration string: '{}'".format(config_json))
 
         try:
@@ -175,9 +158,10 @@ class EddMasterController(EDDPipeline):
             # provisioning
             cfg = self.__sanitizeConfig(cfg)
             self._config = cfg
-            self._installController(self._config)
         else:
             EDDPipeline.set(self, cfg)
+
+        yield self._installController(self._config)
 
         cfs = json.dumps(self._config, indent=4)
         log.debug("Starting configuration:\n" + cfs)
@@ -504,6 +488,38 @@ class EddMasterController(EDDPipeline):
 
         self.__provisioned = playbook_file
 
+        yield self.loadBasicConfig(basic_config_file)
+
+
+    @request(Str())
+    @return_reply()
+    def request_load_basic_config(self, req, name):
+        """
+        @brief   Loads a provision configuration and dispatch it to ansible and sets the data streams for all products
+
+        """
+        log.info("load-basic-config request received")
+        @coroutine
+        def wrapper():
+            try:
+                descr_subfolder = os.path.join(self.__edd_ansible_git_repository_folder, "provison_descriptions")
+                basic_config_file = os.path.join(descr_subfolder, name)
+
+                yield self.loadBasicConfig(basic_config_file)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def loadBasicConfig(self, basic_config_file):
         try:
             with open(basic_config_file) as cfg:
                 basic_config = json.load(cfg)
@@ -511,26 +527,17 @@ class EddMasterController(EDDPipeline):
             raise FailReply("Error reading config {}".format(E))
         log.debug("Read basic config: {}".format(json.dumps(basic_config, indent=4)))
 
-        self.__eddDataStore.updateProducts()
         basic_config = self.__sanitizeConfig(basic_config)
 
-        self._installController(basic_config)
-
+        yield self._installController(basic_config)
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
         self._config = self._default_config.copy()
 
         self._config["products"] = {}
-#        self._config["packetizers"] = basic_config['packetizers']
 
-        if isinstance(basic_config['products'], dict):
-            log.warning("Configuration uses dictionary as product list -  should be list")
-            product_list =  basic_config['products'].values()
-        else:
-            product_list =  basic_config['products']
-
-        for product in product_list:
+        for product in basic_config['products'].values():
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
 
@@ -539,7 +546,6 @@ class EddMasterController(EDDPipeline):
             cfg = yield controller.getConfig()
             log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
 
-            #cfg = EDDPipeline.updateConfig(cfg, product)
             self._config["products"][cfg['id']] = cfg
 
         self._configUpdated()
@@ -547,19 +553,9 @@ class EddMasterController(EDDPipeline):
 
     def __sanitizeConfig(self, config):
         """
-        Ensures config has products and packaetizers
+        Ensures config products are a dict with product['id'] as key
         """
         log.debug("Sanitze config")
-        if 'packetisers' in config:
-            config['packetizers'] = config.pop('packetisers')
-        elif "packetizers" not in config:
-            log.warning("No packetizers in config!")
-            config["packetizers"] = {}
-
-        if isinstance(config['packetizers'], list):
-            d = {p['id']:p for p in config['packetizers']}
-            config["packetizers"] = d
-
         if not 'products' in config:
             config["products"] = {}
         elif isinstance(config['products'], list):
@@ -568,37 +564,59 @@ class EddMasterController(EDDPipeline):
         return config
 
 
-    def _installController(self, config):
+    @coroutine
+    def _installController(self, config = {}):
         """
-        Ensure a controller exists for all components in a configuration
+        Updates controllers for all products known to redis and ensure a controller exists for all components in a configuration.
         """
-        log.debug("Installing controller for products.")
-        config = self.__sanitizeConfig(config)
-
-        for packetizer in config['packetizers'].itervalues():
-            if packetizer["id"] in self.__controller:
-                log.warning("Controller for {} already there, not replacing with new controller!".format(packetizer["id"]))
-            else:
-                log.debug("Adding new controller for {}".format(packetizer["id"]))
-                self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
-                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
-
-        for product in config["products"].itervalues():
+        log.debug("Installing controller for {} registered products.".format(len(self.__eddDataStore.products)))
+        for product in self.__eddDataStore.products:
+            if product['id'] == self._config["id"]:
+                log.debug("Ignoring self for control: {}".format(product['id']))
+                continue
             if product['id'] in self.__controller:
-                log.warning("Controller for {} already there".format(product['id']))
-            else:
-                log.debug("Adding new controller for {}".format(product["id"]))
-            if "type" in product and product["type"] == "roach2":
-                    self.__controller[product['id']] = EddRoach2ProductController(self, product['id'],
-                                                                            (self._r2rm_host, self._r2rm_port))
-            elif product['id']:
-                if product['id'] in self.__eddDataStore.products:
-                    cfg = self.__eddDataStore.getProduct(product['id'])
-                    cfg.update(product)
-                    self.__controller[product['id']] = EddServerProductController(cfg['id'], cfg["address"], cfg["port"])
+                log.debug("Controller for {} already installed.".format(product['id']))
+                controller = self.__controller[product['id']]
+                if (product['ip'] == controller.ip) and (product['port'] == controller.port):
+                    # No action needed as identical product
+                    log.debug("Ip and port matching, doing nothing.")
+                    continue
                 else:
-                    log.warning("Manual setup of product {} - require address and port properties".format(product['id']))
-                    self.__controller[product['id']] = EddServerProductController(product['id'], product["address"], product["port"])
+                    log.debug("Ip and port not matching, Checking controller health.")
+                    ping = yield controller.ping()
+                    if ping:
+                        log.warning("Controller for {} already present at {}:{} and reachable. Not updating with new controller for product at {}:{}".format(product,controller.ip, controller.port, product['ip'], product['port']))
+                        continue
+                    else:
+                        log.warning("Controller for {} already present but not reachable at {}:{}. Replacing with new controller for product at {}:{}".format(product,controller.ip, controller.port, product['ip'], product['port']))
+            try:
+                self.__controller[product['id']] = EddServerProductController(product['id'], product["ip"], product["port"])
+            except:
+                log.error("Cannot create controller for {} at {}:{}. Removing product from redis.".format(product['id'], product["ip"], product["port"]))
+                self.__eddDataStore.removeProduct(product)
+            else:
+                ping = yield self.__controller[product['id']].ping()
+                if ping:
+                    log.debug("Reached product {} at {}:{}.".format(product['id'], product["ip"], product["port"]))
+                else:
+                    log.error("Cannot reach product {} at {}:{}. Removing product from redis.".format(product['id'], product["ip"], product["port"]))
+                    self.__eddDataStore.removeProduct(product)
+
+
+        if config: log.debug("Checking product for config")
+        for product in config['products'].values():
+            if product['id'] not in self.__controller:
+                log.warning('Product {} found in configuration, but no product registered. Manually adding controller for product.'.format(product['id']))
+                if ('ip' not in product) or ('port' not in product):
+                    raise RuntimeError("No controller for {} could be installed automatically. Manual config requires IP and PORT, which were not provided!".format(product['id']))
+                log.warning('Manually installed product {} at {}:{}'.format(product['id'], product['ip'], product['port']))
+                self.__controller[product['id']] = EddServerProductController(product['id'], product["ip"], product["port"])
+
+            ping = yield self.__controller[product['id']].ping()
+            if not ping: 
+                raise RuntimeError('Product {} required by config but not reachable at {}:{}'.format(product['id'], product['ip'], product['port']))
+
+
 
 
     @request()
@@ -644,9 +662,6 @@ class EddMasterController(EDDPipeline):
             except Exception as E:
                 raise FailReply("Error in deprovisioning thrown by ansible {}".format(E))
 
-            self.__eddDataStore.updateProducts()
-        self.__eddDataStore.flush()
-        self.__controller = {}
         self.__provisioned = None
 
 
@@ -697,10 +712,6 @@ class EddMasterController(EDDPipeline):
 
 if __name__ == "__main__":
     parser = getArgumentParser()
-    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
-                      help='The ip for the redis server')
-    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
-                      help='The port number for the redis server')
 
     parser.add_argument('--edd_ansible_repository', dest='edd_ansible_git_repository_folder', type=str, default=os.path.join(os.getenv("HOME"), "edd_ansible"), help='The path to a git repository for the provisioning data')
 

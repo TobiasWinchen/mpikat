@@ -1,6 +1,7 @@
 import redis
 import json
 import logging
+import argparse
 
 log = logging.getLogger("mpikat.effelsberg.edd.EDDDataStore")
 
@@ -111,13 +112,22 @@ class EDDDataStore:
         return json.loads(self._dataStreams[streamid])
 
 
+    def removeProduct(self, cfg):
+        netid = "{ip}:{port}".format(**cfg)
+        self._products.delete(netid)
+
 
     def updateProduct(self, cfg):
         """
         Updates the global product database for a product with a given config.
         """
         netid = "{ip}:{port}".format(**cfg)
-        self._products.hmset(netid, {key: cfg[key ]for key in ['id', 'type', 'ip', 'port']})
+        c = dict.fromkeys(['id', 'type', 'ip', 'port'])
+        for k in c:
+            if k in cfg:
+                c[k] = cfg[k]
+
+        self._products.hmset(netid, c)
 
 
     @property
@@ -128,7 +138,7 @@ class EDDDataStore:
         d = []
         # Create dict with id as key
         for k in self._products.keys():
-            d.append(self._products.getall(k))
+            d.append(self._products.hgetall(k))
         return d
 
 
@@ -187,7 +197,29 @@ class EDDDataStore:
         return self._telescopeMetaData.hget(key, "value")
 
 if __name__ == "__main__":
-    logging.basicConfig()
-    store = EDDDataStore("foo")
-    store.setTelescopeDataItem("foo", "bar")
-    print (store.getTelescopeDataItem("foo"))
+    parser = argparse.ArgumentParser(description="commandline access to data store")
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
+                      help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
+                      help='The port number for the redis server')
+
+    parser.add_argument('--register_product', dest='product_config', type=str, 
+                      help='Product config for the registration id=ProductId;ip=HOSTNAME;port=port')
+
+    args= parser.parse_args()
+
+    dataStore = EDDDataStore(args.redis_ip, args.redis_port)
+
+    if args.product_config:
+        cfg = {}
+        print("Updating product info;")
+        for t in args.product_config.split(';'):
+            k,v = t.split('=')
+            print(" {}: {}".format(k, v))
+            cfg[k] = v
+        dataStore.updateProduct(cfg)
+
+
+
+
+

@@ -1,6 +1,6 @@
 import logging
 import json
-from tornado.gen import Return, coroutine
+from tornado.gen import Return, coroutine, with_timeout, TimeoutError
 from katcp import KATCPClientResource
 
 log = logging.getLogger("mpikat.edd_server_product_controller")
@@ -19,7 +19,9 @@ class EddServerProductController(object):
                                       used by this product. Passed in tuple format,
                                       e.g. ("127.0.0.1", 5000)
         """
-        log.debug("Adress {}, {}".format(address, port))
+        log.debug("Installing controller for {} at {}, {}".format(product_id, address, port))
+        self.ip = address
+        self.port = port
         self._client = KATCPClientResource(dict(
             name="server-client_{}".format(product_id),
             address=(address, int(port)),
@@ -131,10 +133,15 @@ class EddServerProductController(object):
         @brief      A no-op method for supporting the product controller interface.
         """
         log.debug("Send get config to {}".format(self.__product_id))
-        f = self._client.list_sensors()
-        R = yield self._safe_request("sensor_value", "current-config")
+        R = yield self._safe_request("sensor_value", "current-config", timeout=3)
         raise Return(json.loads(R.informs[0].arguments[-1]))
 
-
-
-
+    @coroutine
+    def ping(self):
+        log.debug("Ping product {} at {}:{}.".format(self.__product_id, self.ip, self.port))
+        try:
+            yield self._client.until_synced(timeout=2)
+        except TimeoutError:
+            log.debug("Timeout Reached. Product inactive")
+            raise Return(False)
+        raise Return(True)
