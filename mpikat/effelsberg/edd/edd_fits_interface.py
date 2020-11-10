@@ -462,8 +462,10 @@ class FitsInterfaceServer(EDDPipeline):
                 D[1][0] = 10 * np.log10(D[0][0])
 
             for i,s  in enumerate(subs.flat):
-                s.plot(D[0][i], label = "BS Phase 1")
-                s.plot(D[1][i], label = "BS Phase 2")
+                if np.isfinite(D[0][i]).all():
+                    s.plot(D[0][i], label = "BS Phase 1", c='C0')
+                if np.isfinite(D[0][i]).all():
+                    s.plot(D[1][i], label = "BS Phase 2", c='C1')
                 s.set_xlabel('Channel')
                 s.set_ylabel(labels[nsections][i])
                 s.legend(fontsize='x-small', loc='upper right',  ncol =2)
