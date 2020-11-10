@@ -187,11 +187,6 @@ class EDDPipeline(AsyncDeviceServer):
             for key, value in EDDDataStore.data_formats[stream['format']].items():
                 stream.setdefault(key, value)
 
-
-
-
-
-
         self.__config = default_config.copy()
         self._default_config = default_config
         self._subprocesses = []
@@ -762,10 +757,6 @@ class EDDPipeline(AsyncDeviceServer):
 
 
 
-
-        pass
-
-
 def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abortwaitfor=['deconfiguring', 'error', 'panic'], intermediate=None, error='error', timeout=120):
     """
     @brief decorator to perform a state change in a method
@@ -827,7 +818,7 @@ def on_shutdown(ioloop, server):
     ioloop.stop()
 
 
-def getArgumentParser(description = ""):
+def getArgumentParser(description = "", include_register_command=True):
     """
     @brief Provide a arguemnt parser with standard arguments for all pipelines.
     """
@@ -838,7 +829,12 @@ def getArgumentParser(description = ""):
                       help='Port number to bind to')
     parser.add_argument('--log-level', dest='log_level', type=str,
                       help='Port number of status server instance', default="INFO")
-
+    parser.add_argument('--register-id', dest='register_id', type=str,
+                      help='The default pipeline to datastore.')
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
+                      help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
+                      help='The port number for the redis server')
     return parser
 
 
@@ -884,6 +880,10 @@ def launchPipelineServer(Pipeline, args=None):
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, server))
+
+    if args.register_id:
+        server.set({"id": args.register_id})
+        server.register(args.redis_ip, args.redis_port)
 
     def start_and_display():
         log.info("Starting Pipeline server")
