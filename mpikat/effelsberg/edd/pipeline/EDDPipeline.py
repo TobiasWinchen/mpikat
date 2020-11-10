@@ -47,6 +47,7 @@ import tempfile
 import threading
 import types
 import functools
+import socket
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 
@@ -170,7 +171,8 @@ class EDDPipeline(AsyncDeviceServer):
         default_config.setdefault("type", "Unspecified")
         default_config.setdefault("input_data_streams", [])
         default_config.setdefault("output_data_streams", [])
-        default_config["ip"] = ip
+
+        default_config["ip"] = socket.gethostname()
         default_config["port"] = port
 
         for stream in value_list(default_config['input_data_streams']):
