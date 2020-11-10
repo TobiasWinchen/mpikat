@@ -96,19 +96,19 @@ class DigitizerControllerPipeline(EDDPipeline):
         """
         EDDPipeline.setup_sensors(self)
 
-    def check_config(self, cfg):
-        errors = []
-        if not ip_utils.is_valid_multicast_range(*ip_utils.split_ipstring(cfg["output_data_streams"]["polarization_0"]["ip"])):
-            errors.append("Ip strings {} nvalid.\n".format(cfg["output_data_streams"]["polarization_0"]["ip"]) + "\n".join(ip_utils.is_valid_multicast_range.__doc__.split('\n')[1:]))
-        if not ip_utils.is_valid_multicast_range(*ip_utils.split_ipstring(cfg["output_data_streams"]["polarization_1"]["ip"])):
-            errors.append("Ip strings {} nvalid.\n".format(cfg["output_data_streams"]["polarization_0"]["ip"]) + "\n".join(ip_utils.is_valid_multicast_range.__doc__.split('\n')[1:]))
-        if not cfg["bit_depth"] in [8, 10, 12]:
-            errors.append("Unsupported bit-depth.")
-        if not cfg["sampling_rate"] in self._client._sampling_modes:
-            errors.append("Invalid sampling mode")
-
-        if errors:
-            raise FailReply("\n * ".join(["Errors in configuration:"] + errors))
+#    def check_config(self, cfg):
+#        errors = []
+#        if not ip_utils.is_valid_multicast_range(*ip_utils.split_ipstring(cfg["output_data_streams"]["polarization_0"]["ip"])):
+#            errors.append("Ip strings {} nvalid.\n".format(cfg["output_data_streams"]["polarization_0"]["ip"]) + "\n".join(ip_utils.is_valid_multicast_range.__doc__.split('\n')[1:]))
+#        if not ip_utils.is_valid_multicast_range(*ip_utils.split_ipstring(cfg["output_data_streams"]["polarization_1"]["ip"])):
+#            errors.append("Ip strings {} nvalid.\n".format(cfg["output_data_streams"]["polarization_0"]["ip"]) + "\n".join(ip_utils.is_valid_multicast_range.__doc__.split('\n')[1:]))
+#        if not cfg["bit_depth"] in [8, 10, 12]:
+#            errors.append("Unsupported bit-depth.")
+#        if not cfg["sampling_rate"] in self._client._sampling_modes:
+#            errors.append("Invalid sampling mode")
+#
+#        if errors:
+#            raise FailReply("\n * ".join(["Errors in configuration:"] + errors))
 
 
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")

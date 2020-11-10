@@ -476,7 +476,7 @@ class EDDPipeline(AsyncDeviceServer):
         cfg = yield self._cfgjson2dict(config_json)
         try:
             newcfg = updateConfig(self._config, cfg)
-            yield self.check_config(newcfg)
+#            yield self.check_config(newcfg)
             self._config = newcfg
             log.debug("Updated config: '{}'".format(self._config))
         except FailReply as E:
@@ -487,12 +487,12 @@ class EDDPipeline(AsyncDeviceServer):
         except Exception as error:
             raise FailReply("Unknown ERROR: {}".format(str(error)))
 
-    @coroutine
-    def check_config(self, cfg):
-        """
-        Checks a config dictionary for validity. to be implemented in child class. Raise FailReply on invalid setting.
-        """
-        pass
+#    @coroutine
+#    def check_config(self, cfg):
+#        """
+#        Checks a config dictionary for validity. to be implemented in child class. Raise FailReply on invalid setting.
+#        """
+#        pass
 
     @request()
     @return_reply()
