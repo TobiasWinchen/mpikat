@@ -459,12 +459,12 @@ class FitsInterfaceServer(EDDPipeline):
                     D[pk1.blank_phases-1][i] = np.ctypeslib.as_array(pk1.sections[i].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1) / D[pk1.blank_phases-1][0]
                     D[pk2.blank_phases-1][i] = np.ctypeslib.as_array(pk2.sections[i].data).reshape([ndisplay_channels, nchannels // ndisplay_channels]).sum(axis=1) / D[pk2.blank_phases-1][0]
                 D[0][0] = 10 * np.log10(D[0][0])
-                D[1][0] = 10 * np.log10(D[0][0])
+                D[1][0] = 10 * np.log10(D[1][0])
 
             for i,s  in enumerate(subs.flat):
                 if np.isfinite(D[0][i]).all():
                     s.plot(D[0][i], label = "BS Phase 1", c='C0')
-                if np.isfinite(D[0][i]).all():
+                if np.isfinite(D[1][i]).all():
                     s.plot(D[1][i], label = "BS Phase 2", c='C1')
                 s.set_xlabel('Channel')
                 s.set_ylabel(labels[nsections][i])
@@ -492,7 +492,12 @@ class FitsInterfaceServer(EDDPipeline):
             log.debug("Still waiting ...")
             yield sleep(0.5)
         #p.join()
-        log.error("Receiving data")
+        log.debug("Receiving data")
+        if p.exitcode !=0:
+            log.error('Subprocess returned with exitcode: {}'.format(p.exitcode))
+        else:
+            log.debug('Subprocess exitcode: {}'.format(p.exitcode))
+
         try:
             plt = parent_conn.recv()
             log.error("Received {} bytes".format(len(plt)))
