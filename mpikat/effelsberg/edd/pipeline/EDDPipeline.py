@@ -170,6 +170,8 @@ class EDDPipeline(AsyncDeviceServer):
         default_config.setdefault("type", "Unspecified")
         default_config.setdefault("input_data_streams", [])
         default_config.setdefault("output_data_streams", [])
+        default_config["ip"] = ip
+        default_config["port"] = port
 
         for stream in value_list(default_config['input_data_streams']):
             stream.setdefault("source", "")
@@ -712,19 +714,26 @@ class EDDPipeline(AsyncDeviceServer):
         """@brief Default method - no effect"""
         pass
 
-    @request(Str(), Int())
+    @request(include_msg=True)
     @return_reply()
-    def request_populate_data_store(self, req, host, port):
+    def request_register(self, req, msg):
         """
-        @brief Populate the data store with opipeline specific informations, as e.g. data stream format
+        @brief Register the pipeline in the datastore. Optionally the data store can be specified as "ip:port". If not specified the value in the configuration will be used.
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-
+        log.debug("regsiter request")
         @coroutine
-        def populate_data_store_wrapper():
+        def wrapper():
             try:
-                yield self.populate_data_store(host, port)
+                if msg.arguments:
+                    host, port = msg.argument.split(':')
+                    port = int(port)
+                else:
+                    host = self._config['data_store']['ip']
+                    port = self._config['data_store']['port']
+
+                yield self.register(host, port)
             except FailReply as fr:
                 log.error(str(fr))
                 req.reply("fail", str(fr))
@@ -733,12 +742,12 @@ class EDDPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-        self.ioloop.add_callback(populate_data_store_wrapper)
+        self.ioloop.add_callback(wrapper)
         raise AsyncReply
 
 
     @coroutine
-    def populate_data_store(self, host=None, port=None):
+    def register(self, host=None, port=None):
         """@brief Populate the data store"""
         if host == None:
             log.debug("No host provided. Use value from current config.")
@@ -748,6 +757,9 @@ class EDDPipeline(AsyncDeviceServer):
             port = self.config["data_store"]["port"]
         log.debug("Register pipeline in data store @ {}:{}".format(host, port))
         dataStore = EDDDataStore.EDDDataStore(host, port)
+        dataStore.updateProduct(self._config)
+
+
 
 
 

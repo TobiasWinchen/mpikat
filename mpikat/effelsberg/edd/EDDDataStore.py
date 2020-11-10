@@ -35,7 +35,7 @@ data_formats = {
             "ip": "",
             "port": "",
             "bit_depth" : 0,
-            "bandwidth" : 0,
+            "sample_rate" : 0,
             "sync_time" : 0,
             "band_flip": False,
             "central_freq": 0,
@@ -88,36 +88,6 @@ class EDDDataStore:
                 d.flushdb()
 
 
-    def updateProducts(self):
-        """
-        @brief Fill the producers database based on the information in the ansible database
-        """
-        with redisfail2warn():
-            self._products.flushdb()
-            for k in self._ansible.keys():
-                if not k.startswith('facts'):
-                    log.debug("Ignoring: {}".format(k))
-                    continue
-                log.debug("Check facts: {}".format(k))
-
-                facts = json.loads(self._ansible[k])
-
-                if 'ansible_default_ipv4' not in facts:
-                    log.debug("Insufficient facts for {} - possibly nor products".format(k))
-                    continue
-                ip = facts["ansible_default_ipv4"]
-
-                if 'edd_container' not in facts or not isinstance(facts['edd_container'], dict):
-                    log.debug("No products found for: {}".format(k))
-                    continue
-
-                for p in facts['edd_container']:
-                    log.debug("  Found {}".format(p))
-                    facts['edd_container'][p]['hostname'] = facts['ansible_hostname']
-                    facts['edd_container'][p]['address'] = facts["ansible_default_ipv4"]['address']
-                    self._products[p] = json.dumps(facts['edd_container'][p])
-
-
     def addDataStream(self, streamid, streamdescription):
         """
         @brief Add a new data stream to the store. Description as dict.
@@ -142,11 +112,12 @@ class EDDDataStore:
 
 
 
-    def getProduct(self, productid):
+    def updateProduct(self, cfg):
         """
-        @brief Returns product description as dict.
+        Updates the global product database for a product with a given config.
         """
-        return json.loads(self._products[productid])
+        netid = "{ip}:{port}".format(**cfg)
+        self._products.hmset(netid, {key: cfg[key ]for key in ['id', 'type', 'ip', 'port']})
 
 
     @property
@@ -154,7 +125,11 @@ class EDDDataStore:
         """
         @brief List of all product ids.
         """
-        return self._products.keys()
+        d = []
+        # Create dict with id as key
+        for k in self._products.keys():
+            d.append(self._products.getall(k))
+        return d
 
 
     def hasDataStream(self, streamid):
