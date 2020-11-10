@@ -42,7 +42,6 @@ data_formats = {
             "central_freq": 0,
             "bandwidth": 0,
 
-
             "samples_per_heap": 4096,
             "description": "Spead stream of time-domain packetizer data as in EDD ICD."
         }

@@ -141,7 +141,16 @@ class EddServerProductController(object):
         log.debug("Ping product {} at {}:{}.".format(self.__product_id, self.ip, self.port))
         try:
             yield self._client.until_synced(timeout=2)
+            log.debug("product reachable")
+            cfg = yield self.getConfig()
+            if cfg['id'] != self.__product_id:
+                log.warning('Product id changed!')
+                raise Return(False)
+            log.debug("ID match")
         except TimeoutError:
             log.debug("Timeout Reached. Product inactive")
+            raise Return(False)
+        except Exception as E:
+            log.error("Error during ping: {}".format(E))
             raise Return(False)
         raise Return(True)
