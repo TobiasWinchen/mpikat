@@ -27,6 +27,9 @@ from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 import mpikat.utils.numa as numa
 
+import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
+
+
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Int, Str
 
@@ -44,6 +47,7 @@ import tempfile
 import threading
 import types
 import functools
+import socket
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 
@@ -61,6 +65,16 @@ def updateConfig(oldo, new):
                 log.warning("Update option {} with different type! Old value(type) {}({}), new {}({}) ".format(k, old[k], type(old[k]), new[k], type(new[k])))
             old[k] = new[k]
     return old
+
+
+def value_list(d):
+    if isinstance(d, dict):
+        return d.values()
+    else:
+        # Ducktyping
+        return d
+
+
 
 
 
@@ -144,15 +158,36 @@ class EDDPipeline(AsyncDeviceServer):
 
     def __init__(self, ip, port, default_config={}):
         """
-        @brief Initialize the pipeline. Subclasses are required to provide their default config dict.
+        @brief Initialize the pipeline. Subclasses are required to provide their default config dict and specify
+                the data formats definied by the class, if any.
         """
         self.callbacks = set()
         self._state = "idle"
         self.previous_state = "unprovisioned"
         self._sensors = []
         # inject data store dat into all default configs.
-        if "data_store" not in default_config:
-            default_config["data_store"] = dict(ip="localhost", port=6379)
+        default_config.setdefault("data_store", dict(ip="localhost", port=6379))
+        default_config.setdefault("id", "Unspecified")
+        default_config.setdefault("type", "Unspecified")
+        default_config.setdefault("input_data_streams", [])
+        default_config.setdefault("output_data_streams", [])
+
+        default_config["ip"] = socket.gethostname()
+        default_config["port"] = port
+
+        for stream in value_list(default_config['input_data_streams']):
+            stream.setdefault("source", "")
+            if not stream['format']:
+                log.warning("Input stream without format definition!")
+                continue
+            for key, value in EDDDataStore.data_formats[stream['format']].items():
+                stream.setdefault(key, value)
+        for stream in value_list(default_config['output_data_streams']):
+            if not stream['format']:
+                log.warning("Output stream without format definition!")
+                continue
+            for key, value in EDDDataStore.data_formats[stream['format']].items():
+                stream.setdefault(key, value)
 
         self.__config = default_config.copy()
         self._default_config = default_config
@@ -182,14 +217,21 @@ class EDDPipeline(AsyncDeviceServer):
     def _config(self, value):
         if not isinstance(value, dict):
             raise RuntimeError("_config has to be a dict!")
-        self.__config = value
-        self._configUpdated()
+
+        if value == self.__config:
+            log.debug("No changes in config, not updating sensor")
+        else:
+            self.__config = value
+            self._configUpdated()
 
     def _configUpdated(self):
         """
-        Actions to take after config has been updated
+        Signals that the config dict has been updated. Seperate method as direct updates of _config items without writing a full dict to _config will noy trigger the _config.setter and have to call this method manually.
         """
-        self._edd_config_sensor.set_value(json.dumps(self._config, indent=4))
+        self._edd_config_sensor.set_value(json.dumps(self.__config, indent=4))
+
+
+
 
     def setup_sensors(self):
         """
@@ -209,7 +251,7 @@ class EDDPipeline(AsyncDeviceServer):
         self._edd_config_sensor = Sensor.string(
             "current-config",
             description="The current configuration for the EDD backend",
-            default=json.dumps(self._default_config, indent=4),
+            default=json.dumps(self._config, indent=4),
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._edd_config_sensor)
 
@@ -425,7 +467,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def set(self, config_json):
         """
-        @brief      Add the config_json to the current config
+        @brief      Add the config_json to the current config. Input / output data streams will be filled with default values if not provided.
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -433,13 +475,24 @@ class EDDPipeline(AsyncDeviceServer):
         log.debug("Updating configuration: '{}'".format(config_json))
         cfg = yield self._cfgjson2dict(config_json)
         try:
-            self._config = updateConfig(self.__config, cfg)
+            newcfg = updateConfig(self._config, cfg)
+#            yield self.check_config(newcfg)
+            self._config = newcfg
             log.debug("Updated config: '{}'".format(self._config))
+        except FailReply as E:
+            log.error("Check config failed!")
+            raise E
         except KeyError as error:
             raise FailReply("Unknown configuration option: {}".format(str(error)))
         except Exception as error:
             raise FailReply("Unknown ERROR: {}".format(str(error)))
 
+#    @coroutine
+#    def check_config(self, cfg):
+#        """
+#        Checks a config dictionary for validity. to be implemented in child class. Raise FailReply on invalid setting.
+#        """
+#        pass
 
     @request()
     @return_reply()
@@ -658,19 +711,26 @@ class EDDPipeline(AsyncDeviceServer):
         """@brief Default method - no effect"""
         pass
 
-    @request(Str(), Int())
+    @request(include_msg=True)
     @return_reply()
-    def request_populate_data_store(self, req, host, port):
+    def request_register(self, req, msg):
         """
-        @brief Populate the data store with opipeline specific informations, as e.g. data stream format
+        @brief Register the pipeline in the datastore. Optionally the data store can be specified as "ip:port". If not specified the value in the configuration will be used.
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-
+        log.debug("regsiter request")
         @coroutine
-        def populate_data_store_wrapper():
+        def wrapper():
             try:
-                yield self.populate_data_store(host, port)
+                if msg.arguments:
+                    host, port = msg.argument.split(':')
+                    port = int(port)
+                else:
+                    host = self._config['data_store']['ip']
+                    port = self._config['data_store']['port']
+
+                yield self.register(host, port)
             except FailReply as fr:
                 log.error(str(fr))
                 req.reply("fail", str(fr))
@@ -679,15 +739,24 @@ class EDDPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-        self.ioloop.add_callback(populate_data_store_wrapper)
+        self.ioloop.add_callback(wrapper)
         raise AsyncReply
 
 
     @coroutine
-    def populate_data_store(self, host, port):
+    def register(self, host=None, port=None):
         """@brief Populate the data store"""
-        log.debug("Populate data store @ {}:{}".format(host, port))
-        pass
+        if host == None:
+            log.debug("No host provided. Use value from current config.")
+            host = self.config["data_store"]["ip"]
+        if port == None:
+            log.debug("No portprovided. Use value from current config.")
+            port = self.config["data_store"]["port"]
+        log.debug("Register pipeline in data store @ {}:{}".format(host, port))
+        dataStore = EDDDataStore.EDDDataStore(host, port)
+        dataStore.updateProduct(self._config)
+
+
 
 
 def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abortwaitfor=['deconfiguring', 'error', 'panic'], intermediate=None, error='error', timeout=120):
@@ -751,7 +820,7 @@ def on_shutdown(ioloop, server):
     ioloop.stop()
 
 
-def getArgumentParser(description = ""):
+def getArgumentParser(description = "", include_register_command=True):
     """
     @brief Provide a arguemnt parser with standard arguments for all pipelines.
     """
@@ -762,7 +831,12 @@ def getArgumentParser(description = ""):
                       help='Port number to bind to')
     parser.add_argument('--log-level', dest='log_level', type=str,
                       help='Port number of status server instance', default="INFO")
-
+    parser.add_argument('--register-id', dest='register_id', type=str,
+                      help='The default pipeline to datastore.')
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
+                      help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
+                      help='The port number for the redis server')
     return parser
 
 
@@ -808,6 +882,10 @@ def launchPipelineServer(Pipeline, args=None):
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, server))
+
+    if args.register_id:
+        server.set({"id": args.register_id})
+        server.register(args.redis_ip, args.redis_port)
 
     def start_and_display():
         log.info("Starting Pipeline server")

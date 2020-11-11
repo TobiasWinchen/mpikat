@@ -28,7 +28,6 @@ from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipeli
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 
 import mpikat.utils.numa as numa
-import mpikat.utils.numa as numa
 from mpikat.utils.core_manager import CoreManager
 from mpikat.utils.ip_utils import ipstring_to_list
 
@@ -58,27 +57,19 @@ DEFAULT_CONFIG = {
         {
             "polarization_0" :
             {
-                "source": "",                               # name of the source for automatic setting of paramters
-                "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
-                "ip": "225.0.1.152+3",
+                "ip": "225.0.0.156+3",
                 "port": "7148",
-                "bit_depth" : 12,
-                "sample_rate" : 2600000000,
-                "sync_time" : 1581164788.0,
-                "samples_per_heap": 4096,                     # this needs to be consistent with the mkrecv configuration
+                "bit_depth" : 8,
+                "bandwidth" : 1600000000,
             },
              "polarization_1" :
             {
-                "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
-                "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",
-                "ip": "225.0.1.156+3",
+                "ip": "225.0.0.156+3",
                 "port": "7148",
-                "bit_depth" : 12,
-                "sample_rate" : 2600000000,
-                "sync_time" : 1581164788.0,
-                "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
+                "bit_depth" : 8,
+                "bandwidth" : 1600000000,
             }
         },
         "output_data_streams":
@@ -148,6 +139,8 @@ DEFAULT_CONFIG = {
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
         "idx1_modulo": "auto",
     }
+
+
 
 NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
 
@@ -396,7 +389,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         output_bufferSize = nSlices * (8 * (nChannels * self._config['output_bit_depth'] / 8 + 8))
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
-        integrationTime = self._config['fft_length'] * self._config['naccumulate']  / float(self.stream_description["sample_rate"])
+        integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (2*float(self.stream_description["bandwidth"]))
         self._integration_time_status.set_value(integrationTime)
         rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
         rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
@@ -444,6 +437,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         cfg = self._config.copy()
         cfg.update(self.stream_description)
         cfg["dada_key"] = self.__dada_key
+        cfg['sample_rate'] = 2 * cfg["bandwidth"]
 
         ip_range = []
         port = set()
@@ -518,6 +512,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             cfg = self._config.copy()
             cfg.update(self.stream_description)
             cfg["dada_key"] = self.__dada_key
+            cfg['sample_rate'] = 2 * cfg["bandwidth"]
             if not self._config['dummy_input']:
                 numa_node = self.__numa_node_pool[0]
                 fastest_nic, nic_params = numa.getFastestNic(numa_node)
@@ -607,19 +602,6 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             yield command_watcher(cmd)
 
         self._dada_buffers = []
-
-    @coroutine
-    def populate_data_store(self, host, port):
-        """@brief Populate the data store"""
-        log.debug("Populate data store @ {}:{}".format(host, port))
-        dataStore =  EDDDataStore(host, port)
-        log.debug("Adding output formats to known data formats")
-
-        descr = {"description":"Self descriped spead stream of sepctrometer data with noise diode on/off",
-                "ip": None,
-                "port": None,
-                }
-        dataStore.addDataFormatDefinition("GatedSpectrometer:1", descr)
 
 
 
