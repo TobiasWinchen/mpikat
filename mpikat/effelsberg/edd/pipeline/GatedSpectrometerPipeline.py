@@ -400,7 +400,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8)
 
             output_heapSize = nChannels * self._config['output_bit_depth'] / 8
-            integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (2 * float(stream_description["sample_rate"]))
+            integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (2 * float(stream_description["bandwidth"]))
             self._integration_time_status.set_value(integrationTime)
             rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
             rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
