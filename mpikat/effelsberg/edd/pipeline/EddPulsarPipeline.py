@@ -34,6 +34,7 @@ import logging
 import shlex
 import shutil
 import os
+import re
 import base64
 from subprocess import Popen, PIPE
 import tempfile
@@ -60,15 +61,17 @@ DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
     "mode": "Timing",
-    "cod_dm": 0,                            # dm for coherent filterbanking, tested up to 3000
-    "npol": 1,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
+    "cod_dm": 0,                             # dm for coherent filterbanking, tested up to 3000, this will overwrite the DM got from par file if it is non-zero
+    "npol": 4,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
+    "decimation": 8,                         # decimation in frequency for filterbank output
+    "filterbank_nchannels": 8192,
+    "zaplist": "800:1200",                   # frequncy zap list
     "epta_directory": "epta",                # Data will be read from /mnt/epta_directory
     "nchannels": 1024,                       # only used in timing mode
     "nbins": 1024,                           # only used in timing mode
     "tempo2_telescope_name": "Effelsberg",
     "merge_application": "edd_merge",
     "npart": 2,
-    "sync_datastream": "focus_cabin_packetizer:h_polarization",
     "input_data_streams":
     [
         {
@@ -102,7 +105,7 @@ DEFAULT_CONFIG = {
     ],
     "dada_header_params":
     {
-        "filesize": 32000000000,
+        "filesize": 4096000000,
         "instrument": "EDD",
         "receiver_name": "P217",
         "mode": "PSR",
@@ -158,12 +161,13 @@ def parse_tag(source_name):
 
 
 class ArchiveAdder(FileSystemEventHandler):
-    def __init__(self, output_dir):
+    def __init__(self, output_dir, zaplist):
         super(ArchiveAdder, self).__init__()
         #self.output_dir = output_dir
         self.first_file = True
         self.freq_zap_list = ""
         self.time_zap_list = ""
+        self.update_freq_zaplist(zaplist)
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -185,7 +189,6 @@ class ArchiveAdder(FileSystemEventHandler):
         self._syscall("paz {} -e first {}".format(self.freq_zap_list, fname))
 
     def update_freq_zaplist(self, zaplist):
-        self.freq_zap_list = "-F '0 1' "
         for item in range(len(zaplist.split(","))):
             self.freq_zap_list = str(
                 self.freq_zap_list) + " -F '{}' ".format(zaplist.split(",")[item])
@@ -335,20 +338,19 @@ class EddPulsarPipeline(EDDPipeline):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-        self._time_processed = Sensor.string(
-            "_time_processed",
-            description="_time_processed",
+        self._dm_sensor = Sensor.string(
+            "_source_dm",
+            description="_source_dm",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._time_processed)
+        self.add_sensor(self._dm_sensor)
 
-        self._time_processed = Sensor.string(
-            "_time_processed",
-            description="_time_processed",
+        self._par_dict_sensor = Sensor.string(
+            "_par_dict_sensor",
+            description="_par_dict_sensor",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._time_processed)
-
+        self.add_sensor(self._par_dict_sensor)
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -553,6 +555,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("  - sample_clock: {}".format(header['sample_clock']))
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format(scannum, subscannum)
+        header["filesize"] = int(float(self._config["db_params"]["size"]) * 10.0)
         log.debug("  - obs_id: {}".format(header['obs_id']))
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
@@ -669,6 +672,31 @@ class EddPulsarPipeline(EDDPipeline):
                     break
                 else:
                     attempts += 1
+        ## Setting DM value for filterbank recording
+        self.par_dict = {}
+        self.dm = 0
+        try:
+            with open(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))) as fh:
+                for line in fh:
+                    #par file can have 2-4 columns, this is a stupid way to do it
+                    if len(line.strip().split()) == 2:
+                        key, value = line.strip().split()
+                    elif len(line.strip().split()) == 3:
+                        key, value, error = line.strip().split()
+                    elif len(line.strip().split()) == 4:
+                        key, value, lock, error = line.strip().split()
+                    self.par_dict[key] = value.strip()
+        except IOError as error:
+            log.info(error)
+        try:
+            self.dm = float(self.par_dict["DM"])
+        except KeyError as error:
+            log.info("Key {} not found".format(error))
+        if self._config["cod"] != 0:
+            log.info("Overriding filterbank cod DM value from config from {} to {}".format(self.dm, self._config["cod"]))
+            self.dm = self._config["cod"]
+        self._dm_sensor.set_value(self.dm)
+        self._par_dict_sensor.set_value(json.dumps(self.par_dict))
 
 
     @state_change(target="measuring", allowed=["set", "ready", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
@@ -707,18 +735,14 @@ class EddPulsarPipeline(EDDPipeline):
             else:
                 error = "source is unknown"
                 raise EddPulsarPipelineError(error)
+
         if self._config["mode"] == "Searching":
-            if self._config["npol"] == 1:
-                self._decimation = 8
-                self._filterbank_nchannels = 8192
-            else:
-                self._decimation = 11
-                self._filterbank_nchannels = 11264
-            cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}.fits {keyfile}".format( numa=self.numa_number, npol=self._config["npol"], DM=self._config["cod_dm"], nchan=self._filterbank_nchannels, decimation=self._decimation, name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
+            cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}_{DM}_{npol}.fits {keyfile}".format(numa=self.numa_number, npol=self._config["npol"], DM=self.dm, nchan=self._config["filterbank_nchannels"], decimation=self._config["decimation"], name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
+
         if self._config["mode"] == "Baseband":
             cmd = "numactl -m {numa} dada_dbdisk -D {in_path} -b {cpus} -o -k dadc".format(
                 numa=self.numa_number,
-                in_path = self.in_path,
+                in_path=self.in_path,
                 cpus=self.__coreManager.get_coresstr('dspsr'))
 
         log.debug("Running command: {0}".format(cmd))
@@ -763,8 +787,8 @@ class EddPulsarPipeline(EDDPipeline):
             log.info("Input directory: {}".format(self.in_path))
             log.info("Output directory: {}".format(self.out_path))
             log.info("Setting up ArchiveAdder handler")
-            self.handler = ArchiveAdder(self.out_path)
-            self.archive_observer.schedule( self.handler, str(self.in_path), recursive=False)
+            self.handler = ArchiveAdder(self.out_path, self._config["zaplist"])
+            self.archive_observer.schedule(self.handler, str(self.in_path), recursive=False)
             log.info("Starting directory monitor")
             self.archive_observer.start()
             self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
