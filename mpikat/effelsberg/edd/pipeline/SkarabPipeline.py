@@ -166,7 +166,7 @@ class SkarabPipeline(EDDPipeline):
             raise FailReply("Output data streams have to stream to same port")
 
         # update sync tim based on input
-        for l in self._config["output_data_streams"].itervalues():
+        for l in self._config["output_data_streams"].values():
             l["sync_time"] = self._config["input_data_streams"]["polarization_0"]["sync_time"]
         self._configUpdated()
 
