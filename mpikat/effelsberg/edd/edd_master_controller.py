@@ -484,6 +484,9 @@ class EddMasterController(EDDPipeline):
         try:
             subplay_futures = []
             log.debug("Executing playbook as {} seperate subplays in parallel".format(len(provision_playbook)))
+
+            self.__provisioned = playbook_file
+            self._provision_sensor.set_value(playbook_file)
             for play in provision_playbook:
                 subplay_futures.append(self.__ansible_subplay_executioner(play))
 
@@ -492,8 +495,6 @@ class EddMasterController(EDDPipeline):
             raise FailReply("Error in provisioning thrown by ansible {}".format(E))
 
         yield self.loadBasicConfig(basic_config_file)
-        self.__provisioned = playbook_file
-        self._provision_sensor.set_value(playbook_file)
 
 
 
