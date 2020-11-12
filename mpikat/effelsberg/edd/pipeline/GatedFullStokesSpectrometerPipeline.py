@@ -61,7 +61,7 @@ DEFAULT_CONFIG = {
                 "ip": "225.0.0.156+3",
                 "port": "7148",
                 "bit_depth" : 8,
-                "bandwidth" : 1600000000,
+                "sample_rate" : 3200000000,
             },
              "polarization_1" :
             {
@@ -69,7 +69,7 @@ DEFAULT_CONFIG = {
                 "ip": "225.0.0.156+3",
                 "port": "7148",
                 "bit_depth" : 8,
-                "bandwidth" : 1600000000,
+                "sample_rate" : 3200000000,
             }
         },
         "output_data_streams":
@@ -389,7 +389,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         output_bufferSize = nSlices * (8 * (nChannels * self._config['output_bit_depth'] / 8 + 8))
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
-        integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (2*float(self.stream_description["bandwidth"]))
+        integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (float(self.stream_description["sample_rate"]))
         self._integration_time_status.set_value(integrationTime)
         rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
         rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
@@ -437,7 +437,6 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         cfg = self._config.copy()
         cfg.update(self.stream_description)
         cfg["dada_key"] = self.__dada_key
-        cfg['sample_rate'] = 2 * cfg["bandwidth"]
 
         ip_range = []
         port = set()
@@ -512,7 +511,6 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             cfg = self._config.copy()
             cfg.update(self.stream_description)
             cfg["dada_key"] = self.__dada_key
-            cfg['sample_rate'] = 2 * cfg["bandwidth"]
             if not self._config['dummy_input']:
                 numa_node = self.__numa_node_pool[0]
                 fastest_nic, nic_params = numa.getFastestNic(numa_node)

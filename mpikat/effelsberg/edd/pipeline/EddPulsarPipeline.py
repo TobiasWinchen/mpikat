@@ -536,7 +536,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("  - mc interface: {}".format(header['interface']))
         header["sync_time"] = self.sync_epoch
         log.debug("  - sync time: {}".format(header['sync_time']))
-        header["sample_clock"] = float(self._config['input_data_streams'][0]["bandwidth"] * 2) # adjsutment for the predecimation factor is done in the amster controller
+        header["sample_clock"] = float(self._config['input_data_streams'][0]["sample_rate"]) # adjsutment for the predecimation factor is done in the amster controller
         log.debug("  - sample_clock: {}".format(header['sample_clock']))
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format(scannum, subscannum)
