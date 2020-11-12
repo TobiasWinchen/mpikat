@@ -61,7 +61,7 @@ DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
     "mode": "Timing",
-    "cod_dm": 0,                             # dm for coherent filterbanking, tested up to 3000, this will overwrite the DM got from par file if it is non-zero
+    "cod": 0,                             # dm for coherent filterbanking, tested up to 3000, this will overwrite the DM got from par file if it is non-zero
     "npol": 4,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
     "decimation": 8,                         # decimation in frequency for filterbank output
     "filterbank_nchannels": 8192,
