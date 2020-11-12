@@ -99,6 +99,7 @@ DEFAULT_CONFIG = {
                 "ip": "225.0.0.152+3",
                 "port": "7148",
                 "bit_depth" : 8,
+                "sample_rate": 1300000000,
             },
              "polarization_1" :
             {
@@ -106,6 +107,7 @@ DEFAULT_CONFIG = {
                 "ip": "225.0.0.156+3",
                 "port": "7148",
                 "bit_depth" : 8,
+                "sample_rate": 1300000000,
             }
         },
         "output_data_streams":
