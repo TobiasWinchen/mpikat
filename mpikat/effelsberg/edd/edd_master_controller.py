@@ -93,6 +93,11 @@ class EddMasterController(EDDPipeline):
             description="Graph of configuration",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._configuration_graph)
+        self._provision_sensor = Sensor.string(
+            "provision",
+            description="Current provision configuration",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._provision_sensor)
 
 
     @coroutine
@@ -486,9 +491,10 @@ class EddMasterController(EDDPipeline):
         except Exception as E:
             raise FailReply("Error in provisioning thrown by ansible {}".format(E))
 
-        self.__provisioned = playbook_file
-
         yield self.loadBasicConfig(basic_config_file)
+        self.__provisioned = playbook_file
+        self._provision_sensor.set_value(playbook_file)
+
 
 
     @request(Str())
@@ -546,6 +552,7 @@ class EddMasterController(EDDPipeline):
             cfg = yield controller.getConfig()
             log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
 
+            cfg['data_store'] = self._default_config['data_store']
             self._config["products"][cfg['id']] = cfg
 
         self._configUpdated()
@@ -663,6 +670,9 @@ class EddMasterController(EDDPipeline):
                 raise FailReply("Error in deprovisioning thrown by ansible {}".format(E))
 
         self.__provisioned = None
+        self._provision_sensor.set_value("Unprovisioned")
+        self._configuration_graph.set_value("")
+        self._config = self._default_config.copy()
 
 
     @request(Str())
