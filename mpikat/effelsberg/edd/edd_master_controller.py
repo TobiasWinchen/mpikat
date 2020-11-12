@@ -620,8 +620,8 @@ class EddMasterController(EDDPipeline):
                 self.__controller[product['id']] = EddServerProductController(product['id'], product["ip"], product["port"])
 
             ping = yield self.__controller[product['id']].ping()
-            if not ping: 
-                raise RuntimeError('Product {} required by config but not reachable at {}:{}'.format(product['id'], product['ip'], product['port']))
+            if not ping:
+                raise RuntimeError('Product {} required by config but not reachable.'.format(product['id']))
 
 
 
