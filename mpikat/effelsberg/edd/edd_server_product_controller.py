@@ -27,20 +27,20 @@ class EddServerProductController(object):
             address=(address, int(port)),
             controlled=True))
 
-        self.__product_id = product_id
+        self._product_id = product_id
         self._client.start()
 
     @coroutine
     def _safe_request(self, request_name, *args, **kwargs):
-        log.info("Sending request '{}' to {} with arguments {}".format(request_name, self.__product_id, args))
+        log.info("Sending request '{}' to {} with arguments {}".format(request_name, self._product_id, args))
         try:
             yield self._client.until_synced()
             response = yield self._client.req[request_name](*args, **kwargs)
         except Exception as E:
-            log.error("Error processing request: {} in {}".format(E, self.__product_id))
+            log.error("Error processing request: {} in {}".format(E, self._product_id))
             raise E
         if not response.reply.reply_ok():
-            erm = "'{}' request failed in {} with error: {}".format(request_name, self.__product_id, response.reply.arguments[1])
+            erm = "'{}' request failed in {} with error: {}".format(request_name, self._product_id, response.reply.arguments[1])
             log.error(erm)
             raise RuntimeError(erm)
         else:
@@ -61,7 +61,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        log.debug("Send cfg to {}".format(self.__product_id))
+        log.debug("Send cfg to {}".format(self._product_id))
         yield self._safe_request("configure", json.dumps(config), timeout=120.0)
 
     @coroutine
@@ -105,7 +105,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        log.debug("Send set to {}".format(self.__product_id))
+        log.debug("Send set to {}".format(self._product_id))
         yield self._safe_request("set", json.dumps(config), timeout=120.0)
 
 
@@ -114,7 +114,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        log.debug("Send provision to {}".format(self.__product_id))
+        log.debug("Send provision to {}".format(self._product_id))
         yield self._safe_request("provision", config, timeout=120.0)
 
 
@@ -123,7 +123,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        log.debug("Send deprovision to {}".format(self.__product_id))
+        log.debug("Send deprovision to {}".format(self._product_id))
         yield self._safe_request("deprovision", timeout=120.0)
 
 
@@ -132,18 +132,18 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        log.debug("Send get config to {}".format(self.__product_id))
+        log.debug("Send get config to {}".format(self._product_id))
         R = yield self._safe_request("sensor_value", "current-config", timeout=3)
         raise Return(json.loads(R.informs[0].arguments[-1]))
 
     @coroutine
     def ping(self):
-        log.debug("Ping product {} at {}:{}.".format(self.__product_id, self.ip, self.port))
+        log.debug("Ping product {} at {}:{}.".format(self._product_id, self.ip, self.port))
         try:
             yield self._client.until_synced(timeout=2)
             log.debug("product reachable")
             cfg = yield self.getConfig()
-            if cfg['id'] != self.__product_id:
+            if cfg['id'] != self._product_id:
                 log.warning('Product id changed!')
                 raise Return(False)
             log.debug("ID match")

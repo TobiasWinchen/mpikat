@@ -166,7 +166,7 @@ class EddMasterController(EDDPipeline):
         else:
             EDDPipeline.set(self, cfg)
 
-        yield self._installController(self._config)
+        yield self._installController(self._config['products'])
 
         cfs = json.dumps(self._config, indent=4)
         log.debug("Starting configuration:\n" + cfs)
@@ -536,7 +536,7 @@ class EddMasterController(EDDPipeline):
 
         basic_config = self.__sanitizeConfig(basic_config)
 
-        yield self._installController(basic_config)
+        yield self._installController(basic_config['products'])
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
@@ -598,21 +598,22 @@ class EddMasterController(EDDPipeline):
                     else:
                         log.warning("Controller for {} already present but not reachable at {}:{}. Replacing with new controller for product at {}:{}".format(product,controller.ip, controller.port, product['ip'], product['port']))
             try:
-                self.__controller[product['id']] = EddServerProductController(product['id'], product["ip"], product["port"])
+                controller = EddServerProductController(product['id'], product["ip"], product["port"])
             except:
                 log.error("Cannot create controller for {} at {}:{}. Removing product from redis.".format(product['id'], product["ip"], product["port"]))
                 self.__eddDataStore.removeProduct(product)
             else:
-                ping = yield self.__controller[product['id']].ping()
+                ping = yield controller.ping()
                 if ping:
                     log.debug("Reached product {} at {}:{}.".format(product['id'], product["ip"], product["port"]))
+                    self.__controller[product['id']] = controller
                 else:
-                    log.error("Cannot reach product {} at {}:{}. Removing product from redis.".format(product['id'], product["ip"], product["port"]))
+                    log.debug("Cannot reach product {} at {}:{}. Removing product from redis.".format(product['id'], product["ip"], product["port"]))
                     self.__eddDataStore.removeProduct(product)
 
 
         if config: log.debug("Checking product for config")
-        for product in config['products'].values():
+        for product in config.values():
             if product['id'] not in self.__controller:
                 log.warning('Product {} found in configuration, but no product registered. Manually adding controller for product.'.format(product['id']))
                 if ('ip' not in product) or ('port' not in product):
@@ -669,6 +670,9 @@ class EddMasterController(EDDPipeline):
                 yield subplay_futures
             except Exception as E:
                 raise FailReply("Error in deprovisioning thrown by ansible {}".format(E))
+
+        self.__controller = {}
+        yield self._installController()
 
         self.__provisioned = None
         self._provision_sensor.set_value("Unprovisioned")
