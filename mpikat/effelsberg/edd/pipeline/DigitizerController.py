@@ -123,7 +123,7 @@ class DigitizerControllerPipeline(EDDPipeline):
             for pol in ["polarization_0", "polarization_1"]:
                 self._config["output_data_streams"][pol]["sync_time"] = 23
                 self._config["output_data_streams"][pol]["bit_depth"] = self._config["bit_depth"]
-                self._config["output_data_streams"][pol]["bandwidth"] = self._config["sampling_rate"] / self._config['predecimation_factor']
+                self._config["output_data_streams"][pol]["sample_rate"] = self._config["sampling_rate"] / self._config['predecimation_factor']
             self._configUpdated()
             raise Return
 
@@ -164,7 +164,7 @@ class DigitizerControllerPipeline(EDDPipeline):
             for pol in ["polarization_0", "polarization_1"]:
                 self._config["output_data_streams"][pol]["sync_time"] = sync_time
                 self._config["output_data_streams"][pol]["bit_depth"] = self._config["bit_depth"]
-                self._config["output_data_streams"][pol]["bandwidth"] = self._config["sampling_rate"] / self._config['predecimation_factor']
+                self._config["output_data_streams"][pol]["sample_rate"] = self._config["sampling_rate"] / self._config['predecimation_factor']
             self._configUpdated()
             self.__previous_config = self._config
         else:
