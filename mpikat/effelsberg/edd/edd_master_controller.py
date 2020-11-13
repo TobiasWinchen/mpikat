@@ -672,8 +672,7 @@ class EddMasterController(EDDPipeline):
                 raise FailReply("Error in deprovisioning thrown by ansible {}".format(E))
 
         self.__controller = {}
-        yield self._installController()
-
+        self.__eddDataStore._products.flushdb()
         self.__provisioned = None
         self._provision_sensor.set_value("Unprovisioned")
         self._configuration_graph.set_value("")
