@@ -65,7 +65,7 @@ DEFAULT_CONFIG = {
     "npol": 4,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
     "decimation": 8,                         # decimation in frequency for filterbank output
     "filterbank_nchannels": 8192,
-    "zaplist": "800:1200",                   # frequncy zap list
+    "zaplist": "800:1230",                   # frequncy zap list
     "epta_directory": "epta",                # Data will be read from /mnt/epta_directory
     "nchannels": 1024,                       # only used in timing mode
     "nbins": 1024,                           # only used in timing mode
@@ -450,7 +450,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Final configuration:\n" + cfs)
 
         self.__coreManager = CoreManager(self.numa_number)
-        self.__coreManager.add_task("mkrecv", 4, prefere_isolated=True)
+        self.__coreManager.add_task("mkrecv", 8, prefere_isolated=True)
         self.__coreManager.add_task("single", 1)
         self.__coreManager.add_task("dspsr", 4)
 
@@ -721,6 +721,7 @@ class EddPulsarPipeline(EDDPipeline):
                 error = "source is unknown"
                 raise EddPulsarPipelineError(error)
 
+
         if self._config["mode"] == "Searching":
             cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}_{DM}_{npol}.fits {keyfile}".format(numa=self.numa_number, npol=self._config["npol"], DM=self.dm, nchan=self._config["filterbank_nchannels"], decimation=self._config["decimation"], name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
 
@@ -788,20 +789,24 @@ class EddPulsarPipeline(EDDPipeline):
     @coroutine
     def measurement_stop(self):
         """@brief stop mkrecv merging application and dspsr instances."""
-        if self._subprocessMonitor is not None:
-            self._subprocessMonitor.stop()
-        if self._config["mode"] == "Timing":
-            self._png_monitor_callback.stop()
-        process = [self._mkrecv_ingest_proc,
-                   self._polnmerge_proc]
-        for proc in process:
-            proc.terminate(timeout=1)
-        if os.path.isfile("/tmp/t2pred.dat"):
-            os.remove("/tmp/t2pred.dat")
-        log.info("reset DADA buffer")
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
-        del self._subprocessMonitor
+        if self.previous_state == "measuring":
+            if self._subprocessMonitor is not None:
+                self._subprocessMonitor.stop()
+            if self._config["mode"] == "Timing":
+                self._png_monitor_callback.stop()
+            process = [self._mkrecv_ingest_proc,
+                       self._polnmerge_proc]
+            for proc in process:
+                proc.terminate(timeout=1)
+            if os.path.isfile("/tmp/t2pred.dat"):
+                os.remove("/tmp/t2pred.dat")
+            log.info("reset DADA buffer")
+            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
+            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+            del self._subprocessMonitor
+        else:
+            raise StateChange("streaming")
+
 
 
     @state_change(target="idle", intermediate="deconfiguring", error='panic')
