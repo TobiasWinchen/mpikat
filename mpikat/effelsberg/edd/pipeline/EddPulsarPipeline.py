@@ -64,8 +64,8 @@ DEFAULT_CONFIG = {
     "cod": 0,                             # dm for coherent filterbanking, tested up to 3000, this will overwrite the DM got from par file if it is non-zero
     "npol": 4,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
     "decimation": 8,                         # decimation in frequency for filterbank output
-    "filterbank_nchannels": 8192,
-    "zaplist": "800:1200",                   # frequncy zap list
+    "filterbank_nchannels": 8192,            # no of filterbank channels before decimation in digifits
+    "zaplist": "800:1230",                   # frequncy zap list
     "epta_directory": "epta",                # Data will be read from /mnt/epta_directory
     "nchannels": 1024,                       # only used in timing mode
     "nbins": 1024,                           # only used in timing mode
@@ -450,7 +450,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Final configuration:\n" + cfs)
 
         self.__coreManager = CoreManager(self.numa_number)
-        self.__coreManager.add_task("mkrecv", 4, prefere_isolated=True)
+        self.__coreManager.add_task("mkrecv", 8, prefere_isolated=True)
         self.__coreManager.add_task("single", 1)
         self.__coreManager.add_task("dspsr", 4)
 
@@ -684,124 +684,132 @@ class EddPulsarPipeline(EDDPipeline):
         self._par_dict_sensor.set_value(json.dumps(self.par_dict))
 
 
-    @state_change(target="measuring", allowed=["set", "ready", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
+    @state_change(target="measuring", allowed=["set", "ready", "streaming", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
     @coroutine
     def measurement_start(self):
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
-        os.chdir(self.in_path)
-        log.debug("source_name = {}".format(
-            self._source_name))
-        if self._config["mode"] == "Timing":
-            epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
-            if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
-                cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
-                        numa=self.numa_number,
-                        args=self._config["dspsr_params"]["args"],
-                        nchan="-F {}:D".format(self._config["nchannels"]),
-                        nbin="-b {}".format(self._config["nbins"]),
-                        name=self._source_name,
-                        predictor="/tmp/t2pred.dat",
-                        parfile=epta_file,
-                        cpus=self.__coreManager.get_coresstr('dspsr'),
-                        cuda_number=self.cuda_number,
-                        keyfile=self.dada_key_file.name)
+        if self.previous_state == "set":
+            os.chdir(self.in_path)
+            log.debug("source_name = {}".format(
+                self._source_name))
+            if self._config["mode"] == "Timing":
+                epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
+                if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
+                    cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+                            numa=self.numa_number,
+                            args=self._config["dspsr_params"]["args"],
+                            nchan="-F {}:D".format(self._config["nchannels"]),
+                            nbin="-b {}".format(self._config["nbins"]),
+                            name=self._source_name,
+                            predictor="/tmp/t2pred.dat",
+                            parfile=epta_file,
+                            cpus=self.__coreManager.get_coresstr('dspsr'),
+                            cuda_number=self.cuda_number,
+                            keyfile=self.dada_key_file.name)
 
-            elif parse_tag(self._source_name) == "R":
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                        numa=self.numa_number,
-                        args=self._config["dspsr_params"]["args"],
-                        nchan="-F {}:D".format(self._config["nchannels"]),
-                        name=self._source_name,
-                        cpus=self.__coreManager.get_coresstr('dspsr'),
-                        cuda_number=self.cuda_number,
-                        keyfile=self.dada_key_file.name)
-            else:
-                error = "source is unknown"
-                raise EddPulsarPipelineError(error)
+                elif parse_tag(self._source_name) == "R":
+                    cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+                            numa=self.numa_number,
+                            args=self._config["dspsr_params"]["args"],
+                            nchan="-F {}:D".format(self._config["nchannels"]),
+                            name=self._source_name,
+                            cpus=self.__coreManager.get_coresstr('dspsr'),
+                            cuda_number=self.cuda_number,
+                            keyfile=self.dada_key_file.name)
+                else:
+                    error = "source is unknown"
+                    raise EddPulsarPipelineError(error)
 
-        if self._config["mode"] == "Searching":
-            cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}_{DM}_{npol}.fits {keyfile}".format(numa=self.numa_number, npol=self._config["npol"], DM=self.dm, nchan=self._config["filterbank_nchannels"], decimation=self._config["decimation"], name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
 
-        if self._config["mode"] == "Baseband":
-            cmd = "numactl -m {numa} dada_dbdisk -D {in_path} -b {cpus} -o -k dadc".format(
-                numa=self.numa_number,
-                in_path=self.in_path,
-                cpus=self.__coreManager.get_coresstr('dspsr'))
+            if self._config["mode"] == "Searching":
+                cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}_{DM}_{npol}.fits {keyfile}".format(numa=self.numa_number, npol=self._config["npol"], DM=self.dm, nchan=self._config["filterbank_nchannels"], decimation=self._config["decimation"], name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
 
-        log.debug("Running command: {0}".format(cmd))
-        if self._config["mode"] == "Timing":
-            log.info("Staring DSPSR")
-        if self._config["mode"] == "Searching":
-            log.info("Staring DIGIFITS")
-        if self._config["mode"] == "Baseband":
-            log.info("Staring dada_dbdisk")
-        self._dspsr = ManagedProcess(cmd)
-        self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
+            if self._config["mode"] == "Baseband":
+                cmd = "numactl -m {numa} dada_dbdisk -D {in_path} -b {cpus} -o -k dadc".format(
+                    numa=self.numa_number,
+                    in_path=self.in_path,
+                    cpus=self.__coreManager.get_coresstr('dspsr'))
 
-        ####################################################
-        #STARTING EDDPolnMerge                             #
-        ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-            numa=self.numa_number, cpu=self.__coreManager.get_coresstr('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring EDDPolnMerge")
-        self._polnmerge_proc = ManagedProcess(cmd)
-        self._subprocessMonitor.add(
-            self._polnmerge_proc, self._subprocess_error)
+            log.debug("Running command: {0}".format(cmd))
+            if self._config["mode"] == "Timing":
+                log.info("Staring DSPSR")
+            if self._config["mode"] == "Searching":
+                log.info("Staring DIGIFITS")
+            if self._config["mode"] == "Baseband":
+                log.info("Staring dada_dbdisk")
+            self._dspsr = ManagedProcess(cmd)
+            self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
 
-        ####################################################
-        #STARTING MKRECV                                   #
-        ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --quiet".format(
-            numa=self.numa_number, cpu=self.__coreManager.get_coresstr('mkrecv'), dada_header=self.dada_header_file.name)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring MKRECV")
-        self._mkrecv_ingest_proc = ManagedProcess(cmd)
-        self._subprocessMonitor.add(
-            self._mkrecv_ingest_proc, self._subprocess_error)
+            ####################################################
+            #STARTING EDDPolnMerge                             #
+            ####################################################
+            cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
+                numa=self.numa_number, cpu=self.__coreManager.get_coresstr('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring EDDPolnMerge")
+            self._polnmerge_proc = ManagedProcess(cmd)
+            self._subprocessMonitor.add(
+                self._polnmerge_proc, self._subprocess_error)
 
-        ####################################################
-        #STARTING ARCHIVE MONITOR                          #
-        ####################################################
-        if self._config["mode"] == "Timing":
-            log.info("Staring archive monitor")
-            self.archive_observer = Observer()
-            self.archive_observer.daemon = False
-            log.info("Input directory: {}".format(self.in_path))
-            log.info("Output directory: {}".format(self.out_path))
-            log.info("Setting up ArchiveAdder handler")
-            self.handler = ArchiveAdder(self.out_path, self._config["zaplist"])
-            self.archive_observer.schedule(self.handler, str(self.in_path), recursive=False)
-            log.info("Starting directory monitor")
-            self.archive_observer.start()
-            self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
-                self._png_monitor, 5000)
-            self._png_monitor_callback.start()
-        self._subprocessMonitor.start()
-        self._timer = Time.now() - self._timer
-        log.debug("Took {} s to start".format(self._timer * 86400))
+            ####################################################
+            #STARTING MKRECV                                   #
+            ####################################################
+            cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --quiet".format(
+                numa=self.numa_number, cpu=self.__coreManager.get_coresstr('mkrecv'), dada_header=self.dada_header_file.name)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring MKRECV")
+            self._mkrecv_ingest_proc = ManagedProcess(cmd)
+            self._subprocessMonitor.add(
+                self._mkrecv_ingest_proc, self._subprocess_error)
+
+            ####################################################
+            #STARTING ARCHIVE MONITOR                          #
+            ####################################################
+            if self._config["mode"] == "Timing":
+                log.info("Staring archive monitor")
+                self.archive_observer = Observer()
+                self.archive_observer.daemon = False
+                log.info("Input directory: {}".format(self.in_path))
+                log.info("Output directory: {}".format(self.out_path))
+                log.info("Setting up ArchiveAdder handler")
+                self.handler = ArchiveAdder(self.out_path, self._config["zaplist"])
+                self.archive_observer.schedule(self.handler, str(self.in_path), recursive=False)
+                log.info("Starting directory monitor")
+                self.archive_observer.start()
+                self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
+                    self._png_monitor, 5000)
+                self._png_monitor_callback.start()
+            self._subprocessMonitor.start()
+            self._timer = Time.now() - self._timer
+            log.debug("Took {} s to start".format(self._timer * 86400))
+        elif self.previous_state == "streaming":
+            log.debug("previous state = streaming, do nothing, will wait for the next measurement prepare")
 
 
     @state_change(target="ready", intermediate="measurement_stopping")
     @coroutine
     def measurement_stop(self):
         """@brief stop mkrecv merging application and dspsr instances."""
-        if self._subprocessMonitor is not None:
-            self._subprocessMonitor.stop()
-        if self._config["mode"] == "Timing":
-            self._png_monitor_callback.stop()
-        process = [self._mkrecv_ingest_proc,
-                   self._polnmerge_proc]
-        for proc in process:
-            proc.terminate(timeout=1)
-        if os.path.isfile("/tmp/t2pred.dat"):
-            os.remove("/tmp/t2pred.dat")
-        log.info("reset DADA buffer")
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
-        del self._subprocessMonitor
+        if self.previous_state == "measuring":
+            if self._subprocessMonitor is not None:
+                self._subprocessMonitor.stop()
+            if self._config["mode"] == "Timing":
+                self._png_monitor_callback.stop()
+            process = [self._mkrecv_ingest_proc,
+                       self._polnmerge_proc]
+            for proc in process:
+                proc.terminate(timeout=1)
+            if os.path.isfile("/tmp/t2pred.dat"):
+                os.remove("/tmp/t2pred.dat")
+            log.info("reset DADA buffer")
+            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
+            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+            del self._subprocessMonitor
+        else:
+            raise StateChange("streaming")
+
 
 
     @state_change(target="idle", intermediate="deconfiguring", error='panic')
