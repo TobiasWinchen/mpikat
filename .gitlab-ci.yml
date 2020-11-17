@@ -20,7 +20,7 @@ image: edd01:5000/eddbase:latest
 
 test_production_base:
   stage: test
-  extends: production
+  extends: .production
   script:
     - python-coverage run  -p --omit "*/site-packages/*,*test*" --source="mpikat" test.py
   only:
@@ -32,7 +32,7 @@ test_production_base:
 
 test_python3:
   stage: test
-  extends: python3
+  extends: .python3
   script:
     - python3 test.py
   only:
