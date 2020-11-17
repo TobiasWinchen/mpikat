@@ -1,17 +1,13 @@
-stages:
-  - test
-  - deploy
+image: edd01:5000/eddbase:latest
 
-
-image: edd01:5000/edd_gated_stokes
 before_script:
-  - apt-get -y update && apt-get install -y python-ipaddress python-coverage
+  - apt-get install python-ipaddress python2-coverage
 
-
-execute_unit_tests:
+test_production_base:
+  image: edd01:5000/eddbase
   stage: test
   script:
-    - python2-coverage run  --omit "*/site-packages/*,*test*" --source="mpikat" test.py
+    - python2-coverage run  -p --omit "*/site-packages/*,*test*,*/pipeline/*" --source="mpikat" test.py
   only:
     - pushes
     - merge_requests
@@ -20,22 +16,34 @@ execute_unit_tests:
     when: always
 
 
-test_coverage:
-  stage: deploy
-  dependencies:
-    - execute_unit_tests
+test_production_gated:
+  image: edd01:5000/edd_gated_stokes
+  stage: test
   script:
-    - python2-coverage xml
+    - python2-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
+  only:
+    - pushes
+    - merge_requests
   artifacts:
-    reports:
-      cobertura: coverage.xml
-  when: on_success
+    untracked: true
+    when: always
+
+
+    #test_coverage:
+    #  stage: deploy
+    #  dependencies:
+    #    - test_production_gated
+    #    - test_production_base
+    #  script:
+    #    - python2-coverage xml
+    #  artifacts:
+    #    reports:
+    #      cobertura: coverage.xml
+    #  when: on_success
 
 
 test_debug_output:
   stage: deploy
-  dependencies:
-    - execute_unit_tests
   script:
     - cat debug.log
   when: on_failure
@@ -44,8 +52,10 @@ test_debug_output:
 pages:
   stage: deploy
   dependencies:
-    - execute_unit_tests
+    - test_production_gated
+    - test_production_base
   script:
+    - python-coverage combine
     - python-coverage html
     - mkdir public
     - mv htmlcov/ public/coverage
