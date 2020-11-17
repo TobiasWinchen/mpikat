@@ -1,5 +1,6 @@
 from __future__ import print_function, division, unicode_literals
 from mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline import GatedSpectrometerPipeline
+from mpikat.effelsberg.edd.pipeline.GatedFullStokesSpectrometerPipeline import GatedFullStokesSpectrometerPipeline
 from katcp import FailReply
 import unittest
 import tornado.testing
@@ -9,7 +10,7 @@ import logging
 class TestEDDPipeline(tornado.testing.AsyncTestCase):
     @tornado.testing.gen_test(timeout=120)
     def test_sequence(self):
-        pipeline = GatedSpectrometerPipeline("localhost", 1234)
+        pipeline = GatedFullStokesSpectrometerPipeline("localhost", 1234)
         self.assertEqual(pipeline.state, 'idle')
         result = pipeline.configure("")
         self.assertEqual(pipeline.state, 'configuring')
