@@ -89,7 +89,7 @@ def updateInfo():
                     struct.pack('256s', device[:15].encode('ascii')))[20:24])
                 __numaInfo[node]["net_devices"][device]['ip'] = ip
             except IOError as e:
-                logging.warning(" Cannot associate device {} to a node: {}".format(device, e))
+                logging.warning(" Cannot associate device {} to a node: {}".format(device, node))
 
             d = "/sys/class/net/" + device + "/speed"
             speed = 0
@@ -97,7 +97,7 @@ def updateInfo():
                 try:
                     speed = open(d).read()
                 except:
-                    logging.warning(" Cannot acess speed for device {}: {}".format(device, e))
+                    logging.warning(" Cannot acess speed for device {}: {}".format(device, node))
 
             __numaInfo[node]["net_devices"][device]['speed'] = int(speed)
 
@@ -110,7 +110,7 @@ def updateInfo():
         handle = pynvml.nvmlDeviceGetHandleByIndex(i)
         pciInfo = pynvml.nvmlDeviceGetPciInfo(handle)
 
-        d = '/sys/bus/pci/devices/' + pciInfo.busId + "/numa_node"
+        d = '/sys/bus/pci/devices/' + pciInfo.busId.decode('ascii') + "/numa_node"
         node = open(d).read().strip()
         if node not in __numaInfo:
             logging.debug("Device on node {}, but node not in list of nodes. Possible node was deacitvated.".format(node))
