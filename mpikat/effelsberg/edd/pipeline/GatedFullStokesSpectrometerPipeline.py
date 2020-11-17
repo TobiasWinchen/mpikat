@@ -373,7 +373,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         self.stream_description["ip"] += ",{}".format(self._config['input_data_streams'].items()[1][1]["ip"])
         log.debug("Merged ip ranges: {}".format(self.stream_description["ip"]))
 
-        self.input_heapSize =  self.stream_description["samples_per_heap"] * self.stream_description['bit_depth'] / 8
+        self.input_heapSize =  self.stream_description["samples_per_heap"] * self.stream_description['bit_depth'] // 8
 
         nHeaps = self._config["samples_per_block"] / self.stream_description["samples_per_heap"]
         input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
