@@ -115,3 +115,4 @@ SOFTWARE.
 #            }
 #        yield self._send_request_expect_ok('set-control-mode', 'KATCP')
 #        yield self._send_request_expect_fail('configure', json.dumps(config))
+

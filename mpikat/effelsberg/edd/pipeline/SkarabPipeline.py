@@ -155,13 +155,13 @@ class SkarabPipeline(EDDPipeline):
 
         # Convert arbitrary output parts to input list
         iplist = []
-        for l in self._config["output_data_streams"].itervalues():
+        for l in self._config["output_data_streams"].values():
             iplist.extend(ip_utils.ipstring_to_list(l["ip"]))
 
         output_string = ip_utils.ipstring_from_list(iplist)
         output_ip, Noutput_streams, port = ip_utils.split_ipstring(output_string)
 
-        port = set([l["port"] for l in self._config["output_data_streams"].itervalues()])
+        port = set([l["port"] for l in self._config["output_data_streams"].values()])
         if len(port) != 1:
             raise FailReply("Output data streams have to stream to same port")
 

@@ -112,7 +112,7 @@ class EddMasterController(EDDPipeline):
             fixed_cfg = dict(packetizers={}, products={})
             log.debug('Current config:\n' + json.dumps(self._config, indent=4))
 
-            for item, value in cfg.iteritems():
+            for item, value in cfg.items():
                 if item in self._config['packetizers']:
                     fixed_cfg['packetizers'][item] = value
                 elif item in self._config['products']:
@@ -280,7 +280,7 @@ class EddMasterController(EDDPipeline):
         log.info("Deconfiguring all products:")
         log.debug("Sending deconfigure to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.deconfigure())
         yield futures
         self._configuration_graph.set_value("")
@@ -302,7 +302,7 @@ class EddMasterController(EDDPipeline):
         """
         log.debug("Sending capture_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.capture_start())
         yield futures
 
@@ -319,7 +319,7 @@ class EddMasterController(EDDPipeline):
         """
         log.debug("Sending capture_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.capture_stop())
         yield futures
 
@@ -336,7 +336,7 @@ class EddMasterController(EDDPipeline):
 
         log.debug("Sending measurement_prepare to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.measurement_prepare(cfg))
         yield futures
 
@@ -347,7 +347,7 @@ class EddMasterController(EDDPipeline):
         """
         log.debug("Sending measurement_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.measurement_start())
         yield futures
 
@@ -358,7 +358,7 @@ class EddMasterController(EDDPipeline):
         """
         log.debug("Sending measurement_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.measurement_stop())
         yield futures
 

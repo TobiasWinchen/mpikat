@@ -353,7 +353,7 @@ def main():
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
                       help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=long,
+    parser.add_option('-p', '--port', dest='port', type=int,
                       help='Port number to bind to')
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='logging level', default="INFO")

@@ -49,6 +49,14 @@ import types
 import functools
 import socket
 
+import sys
+if sys.version_info[0] >=3:
+    unicode_type = str
+else:
+    unicode_type = unicode
+
+
+
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 
 def updateConfig(oldo, new):
@@ -445,7 +453,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         @brief  Returns the config as dict.
         """
-        if isinstance(config_json, str) or isinstance(config_json, unicode):
+        if isinstance(config_json, str) or isinstance(config_json, unicode_type):
             log.debug("Received config as string:\n  {}".format(config_json))
             if (not config_json.strip()) or config_json.strip() == '""':
                 log.debug("String empty, returning empty dict.")

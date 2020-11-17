@@ -42,7 +42,7 @@ class ContiguousIpRange(object):
         @note       This class is intended for managing SPEAD stream IPs, hence the assocated
                     port number and the 'spead://' prefix used in the format_katcp method.
         """
-        self._base_ip = ipaddress.ip_address(unicode(base_ip))
+        self._base_ip = ipaddress.ip_address(str(base_ip))
         self._ips = [self._base_ip+ii for ii in range(count)]
         self._port = port
         self._count = count

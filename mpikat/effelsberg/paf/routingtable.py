@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from __future__ import print_function
 import logging
 import math
 import paramiko
@@ -8,6 +8,11 @@ import time
 import tempfile
 import socket
 from os.path import join
+import sys
+if sys.version_info[0] >= 3:
+    unicode = str
+
+
 
 log = logging.getLogger("mpikat.paf_routingtable")
 

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import logging
 from threading import Thread, Event
 import time
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     m = SubprocessMonitor()
 
     def callback(args):
-        print m.stop()
+        print(m.stop())
 
     m.add(f, callback)
     m.start()

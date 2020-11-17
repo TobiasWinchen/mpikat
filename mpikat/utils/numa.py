@@ -135,7 +135,7 @@ def getFastestNic(numa_node=None):
     """
     if numa_node is not None:
         nics = getInfo()[numa_node]["net_devices"]
-        fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
+        fastest_nic = max(nics.keys(), key=lambda k: nics[k]['speed'])
         return fastest_nic, nics[fastest_nic]
     else:
         f = None
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
         nics = res['net_devices']
         if len(nics) > 0:
-            fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
+            fastest_nic = max(nics.keys(), key=lambda k: nics[k]['speed'])
             print('   -> Fastest interface: {}'.format(fastest_nic))
 
     print("Fastest nic over all: {}".format(getFastestNic()))

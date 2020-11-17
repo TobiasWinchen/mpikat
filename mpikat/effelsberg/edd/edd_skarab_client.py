@@ -59,7 +59,7 @@ class SkarabInterface(object):
         log.debug("Connecting to FPGA {}:{}".format(self.__ip, self.__port))
         self._client = casperfpga.CasperFpga(self.__ip, self.__port)
         info = self._client.transport.get_skarab_version_info()
-        log.debug("Succcessfully Connected to FPGA - Retrieved Skarab info:" + "\n".join(["    -  {}: {}".format(k,v) for k,v in info.iteritems()]))
+        log.debug("Succcessfully Connected to FPGA - Retrieved Skarab info:" + "\n".join(["    -  {}: {}".format(k,v) for k,v in info.items()]))
 
 
     def is_connected(self):
@@ -190,7 +190,7 @@ class SkarabChannelizerClient(SkarabInterface):
 
 
     @coroutine
-    def configure_output(self, dest_ip, dest_port, number_of_groups=8, channels_per_group=8, board_id=07):
+    def configure_output(self, dest_ip, dest_port, number_of_groups=8, channels_per_group=8, board_id=0x07):
         """
         @brief      Configur skarab output
 
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Configures skarab board")
     parser.add_argument('host', type=str,
         help='IP of Skarab board to bind to')
-    parser.add_argument('-p', '--port', dest='port', type=long,
+    parser.add_argument('-p', '--port', dest='port', type=int,
         help='Port to bind to (default=7147)', default=7147)
 
     parser.add_argument('--firmwarefile', dest='firmwarefile', type=str, default=DEFAULTFIRMWARE,

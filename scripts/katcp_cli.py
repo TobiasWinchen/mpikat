@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import logging
 import sys
 import traceback
@@ -128,7 +129,7 @@ class KatcpCli(Cmd):
         try:
             msg = self.katcp_parser.parse(request)
             self.client.ioloop.add_callback(self.client.send_message, msg)
-        except Exception, e:
+        except Exception as e:
             e_type, e_value, trace = sys.exc_info()
             reason = "\n".join(traceback.format_exception(
                 e_type, e_value, trace, 20))
@@ -154,7 +155,7 @@ class KatcpCli(Cmd):
         try:
             host,port = arg.split(":")
         except Exception:
-            print "Usage: connect <host>:<port>"
+            print("Usage: connect <host>:<port>")
             return
         try:
             app = KatcpCli(host,port)

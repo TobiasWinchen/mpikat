@@ -1,3 +1,4 @@
+from __future__ import  print_function
 import socket
 import errno
 import logging
@@ -7,7 +8,12 @@ import shlex
 from tornado.ioloop import IOLoop
 from tornado.gen import Return, coroutine, sleep
 from threading import Thread, Event
-from Queue import Queue
+import sys
+if sys.version_info[0] >=3:
+    import queue
+else:
+    import Queue as queue       # In python 3 this will be queue
+
 from datetime import datetime
 import time
 

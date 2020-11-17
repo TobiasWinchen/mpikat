@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from __future__ import print_function
 import logging
 import socket
 from tornado.gen import coroutine, Return
@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-H', '--host', dest='host', type=str,
         help='Host interface to bind to', default="automatic")
-    parser.add_argument('-p', '--port', dest='port', type=long,
+    parser.add_argument('-p', '--port', dest='port', type=int,
         help='Port number to bind to', default=1235)
 
     parser.add_argument('-s', '--select-product', dest='select_product', type=str,

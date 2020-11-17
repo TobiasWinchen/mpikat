@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 
 import coloredlogs
-import ConfigParser
+import sys
+if sys.version_info[0] >=3:
+    import configparser
+else:
+    import ConfigParser
 import json
 import numpy as np
 import socket

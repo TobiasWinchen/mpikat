@@ -279,7 +279,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         self._polarization_sensors[streamid] = {}
         self._polarization_sensors[streamid]["mkrecv_sensors"] = MkrecvSensors(streamid)
-        for s in self._polarization_sensors[streamid]["mkrecv_sensors"].sensors.itervalues():
+        for s in self._polarization_sensors[streamid]["mkrecv_sensors"].sensors.values():
             self.add_sensor(s)
         self._polarization_sensors[streamid]["input-buffer-fill-level"] = Sensor.float(
                 "input-buffer-fill-level-{}".format(streamid),
@@ -326,11 +326,11 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         @brief Process a change in the buffer status
         """
-        for streamid, stream_description in self._config["input_data_streams"].iteritems():
+        for streamid, stream_description in self._config["input_data_streams"].items():
             if status['key'] == stream_description['dada_key']:
                 self._polarization_sensors[streamid]["input-buffer-total-write"].set_value(status['written'])
                 self._polarization_sensors[streamid]["input-buffer-fill-level"].set_value(status['fraction-full'])
-        for streamid, stream_description in self._config["input_data_streams"].iteritems():
+        for streamid, stream_description in self._config["input_data_streams"].items():
             if status['key'] == stream_description['dada_key'][::-1]:
                 self._polarization_sensors[streamid]["output-buffer-fill-level"].set_value(status['fraction-full'])
                 self._polarization_sensors[streamid]["output-buffer-total-read"].set_value(status['read'])
