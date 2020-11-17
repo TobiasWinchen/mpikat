@@ -4,14 +4,25 @@ stages:
 
 image: edd01:5000/eddbase:latest
 
-before_script:
-  - apt-get -y update && apt-get install -y python-ipaddress python-coverage
+
+.production:
+  image: edd01:5000/eddbase
+  before_script:
+    - apt-get -y update && apt-get install -y python-ipaddress python-coverage
+
+.python3:
+  image: nvidia/cuda:10.2-devel-ubuntu18.04
+  before_script:
+    - apt-get -y update && apt-get install -y python3-pip python3-pybind11 git
+    - pip3 install katcp spead2 redis coloredlogs
+
+
 
 test_production_base:
-  image: edd01:5000/eddbase
   stage: test
+  extends: production
   script:
-    - python-coverage run  -p --omit "*/site-packages/*,*test*,*/pipeline/*" --source="mpikat" test.py
+    - python-coverage run  -p --omit "*/site-packages/*,*test*" --source="mpikat" test.py
   only:
     - pushes
     - merge_requests
@@ -19,19 +30,28 @@ test_production_base:
     untracked: true
     when: always
 
-
-test_production_gated:
-  image: edd01:5000/edd_gated_stokes
+test_python3:
   stage: test
+  extends: python3
   script:
-    - cp testing_tools/dummy_numa_ctl.py /usr/bin/numactl
-    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
+    - python3 test.py
   only:
     - pushes
     - merge_requests
-  artifacts:
-    untracked: true
-    when: always
+
+
+    #test_production_gated:
+    #  image: edd01:5000/edd_gated_stokes
+    #  stage: test
+    #  script:
+    #    - cp testing_tools/dummy_numa_ctl.py /usr/bin/numactl
+    #    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
+    #  only:
+    #    - pushes
+    #    - merge_requests
+    #  artifacts:
+    #    untracked: true
+    #    when: always
 
 
     #test_coverage:
@@ -57,7 +77,7 @@ test_debug_output:
 pages:
   stage: deploy
   dependencies:
-    - test_production_gated
+    #    - test_production_gated
     - test_production_base
   script:
     - python-coverage combine
