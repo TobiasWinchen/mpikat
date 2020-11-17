@@ -1,13 +1,17 @@
+stages:
+  - test
+  - deploy
+
 image: edd01:5000/eddbase:latest
 
 before_script:
-  - apt-get install python-ipaddress python2-coverage
+  - apt-get -y update && apt-get install -y python-ipaddress python-coverage
 
 test_production_base:
   image: edd01:5000/eddbase
   stage: test
   script:
-    - python2-coverage run  -p --omit "*/site-packages/*,*test*,*/pipeline/*" --source="mpikat" test.py
+    - python-coverage run  -p --omit "*/site-packages/*,*test*,*/pipeline/*" --source="mpikat" test.py
   only:
     - pushes
     - merge_requests
@@ -20,7 +24,7 @@ test_production_gated:
   image: edd01:5000/edd_gated_stokes
   stage: test
   script:
-    - python2-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
+    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
   only:
     - pushes
     - merge_requests
