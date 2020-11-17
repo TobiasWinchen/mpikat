@@ -173,7 +173,6 @@ class EddMasterController(EDDPipeline):
 
 
         # Data streams are only filled in on final configure as they may
-<<<<<<< HEAD
         # require data from the configure command of previous products. As example, the packetizer
         # data stream has a sync time that is propagated to other components
         # The components are thus configured following the dependency tree,
