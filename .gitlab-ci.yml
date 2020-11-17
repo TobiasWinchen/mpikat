@@ -13,8 +13,8 @@ image: edd01:5000/eddbase:latest
 .python3:
   image: nvidia/cuda:10.2-devel-ubuntu18.04
   before_script:
-    - apt-get -y update && apt-get install -y python3-pip python3-pybind11 git
-    - pip3 install katcp spead2 redis coloredlogs
+    - apt-get -y update && apt-get install -y python3-pip python3-pybind11 git #libboost-program-options-dev libboost-system-dev
+    - pip3 install katcp redis coloredlogs #spead2 
 
 
 
