@@ -40,18 +40,19 @@ test_python3:
     - merge_requests
 
 
-    #test_production_gated:
-    #  image: edd01:5000/edd_gated_stokes
-    #  stage: test
-    #  script:
-    #    - cp testing_tools/dummy_numa_ctl.py /usr/bin/numactl
-    #    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
-    #  only:
-    #    - pushes
-    #    - merge_requests
-    #  artifacts:
-    #    untracked: true
-    #    when: always
+test_production_gated:
+  image: edd01:5000/edd_gated_stokes
+  extends: .production
+  stage: test
+  script:
+    - cp testing_tools/dummy_numa_ctl.py /usr/bin/numactl
+    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
+  only:
+    - pushes
+    - merge_requests
+  artifacts:
+    untracked: true
+    when: always
 
 
     #test_coverage:
