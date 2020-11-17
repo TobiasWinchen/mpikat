@@ -12,7 +12,7 @@ class TestEDDPipeline(tornado.testing.AsyncTestCase):
     def test_sequence(self):
         pipeline = GatedFullStokesSpectrometerPipeline("localhost", 1234)
         self.assertEqual(pipeline.state, 'idle')
-        result = pipeline.configure("")
+        result = pipeline.configure('{"nonfatal_numacheck":true}')
         self.assertEqual(pipeline.state, 'configuring')
         yield result
         self.assertEqual(pipeline.state, 'configured')
@@ -38,4 +38,8 @@ class TestEDDPipeline(tornado.testing.AsyncTestCase):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='debug.log',
+        format=("[ %(levelname)s - %(asctime)s - %(name)s "
+             "- %(filename)s:%(lineno)s] %(message)s"),
+            level=logging.DEBUG)
     unittest.main()
