@@ -439,7 +439,13 @@ class FitsInterfaceServer(EDDPipeline):
             mpl.use('Agg')
             import numpy as np
             import pylab as plt
-            import cStringIO
+
+            import sys
+            if sys.version_info[0] >=3:
+                import io
+            else:
+                import cStringIO as io
+
             import base64
             mpl.rcParams.update(mpl.rcParamsDefault)
             mpl.use('Agg')
@@ -478,7 +484,7 @@ class FitsInterfaceServer(EDDPipeline):
             #s.legend(fontsize='x-small', loc='upper right', bbox_to_anchor=bbox_anchor[nsections], ncol =2)
             fig.suptitle('{} / {}'.format(pk1.timestamp, pk2.timestamp))
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-            fig_buffer = cStringIO.StringIO()
+            fig_buffer = io.StringIO()
             fig.savefig(fig_buffer, format='png')
             fig_buffer.seek(0)
             b64 = base64.b64encode(fig_buffer.read())

@@ -319,7 +319,7 @@ class EddMasterController(EDDPipeline):
         """
         log.debug("Sending capture_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
-        for cid, controller in self.__controller.iteritems():
+        for cid, controller in self.__controller.items():
             futures.append(controller.capture_stop())
         yield futures
 
