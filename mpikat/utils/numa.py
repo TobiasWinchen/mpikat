@@ -135,8 +135,12 @@ def getFastestNic(numa_node=None):
     """
     if numa_node is not None:
         nics = getInfo()[numa_node]["net_devices"]
-        fastest_nic = max(nics.keys(), key=lambda k: nics[k]['speed'])
-        return fastest_nic, nics[fastest_nic]
+        if nics:
+            fastest_nic = max(nics.keys(), key=lambda k: nics[k]['speed'])
+            return fastest_nic, nics[fastest_nic]
+        else:
+            logging.warning("Using dummy nic - are you in debug mode?")
+            return "dummy_nic", {"ip":"127.0.0.1","speed":12345}
     else:
         f = None
         d = None
@@ -148,6 +152,10 @@ def getFastestNic(numa_node=None):
            f = fn
            d = fnd
            d['node'] = node
+        if not f:
+            logging.warning("Using dummy nic - are you in debug mode?")
+            return "dummy_nic", {"ip":"127.0.0.1","speed":12345}
+
         return f, d
 
 
