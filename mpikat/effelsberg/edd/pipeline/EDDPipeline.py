@@ -374,6 +374,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Sets the error state because proc has ended.
         """
+        pass
         log.error("Errror handle called because subprocess {} ended with return code {}".format(proc.pid, proc.returncode))
         self._subprocessMonitor.stop()
         self.state =  "error"

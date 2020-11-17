@@ -12,7 +12,7 @@ class TestEDDPipeline(tornado.testing.AsyncTestCase):
     def test_sequence(self):
         pipeline = GatedFullStokesSpectrometerPipeline("localhost", 1234)
         self.assertEqual(pipeline.state, 'idle')
-        result = pipeline.configure('{"nonfatal_numacheck":true}')
+        result = pipeline.configure('{"nonfatal_numacheck":true,"dummy_input":true,"output_type":"null"}')
         self.assertEqual(pipeline.state, 'configuring')
         yield result
         self.assertEqual(pipeline.state, 'configured')
@@ -30,9 +30,11 @@ class TestEDDPipeline(tornado.testing.AsyncTestCase):
         yield pipeline.measurement_prepare()
         self.assertEqual(pipeline.state, 'streaming')
 
-        yield pipeline.capture_stop()
-        self.assertEqual(pipeline.state, 'idle')
+        #yield pipeline.capture_stop()
+        #self.assertEqual(pipeline.state, 'idle')
 
+        # This test needs to be available,as otherwise on successfull test
+        # pycoverage wont exit
         yield pipeline.deconfigure()
         self.assertEqual(pipeline.state, 'idle')
 

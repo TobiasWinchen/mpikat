@@ -540,6 +540,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
             self.mkrec_cmd.append(mk)
             self._subprocessMonitor.add(mk, self._subprocess_error)
+            self._subprocesses.append(mk)
 
         except Exception as E:
             log.error("Error starting pipeline: {}".format(E))
@@ -602,7 +603,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
-            yield command_watcher(cmd)
+            yield command_watcher(cmd, allow_fail=True)
 
         self._dada_buffers = []
 
