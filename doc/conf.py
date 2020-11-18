@@ -57,7 +57,7 @@ autoapi_options = ["members", "inherited-members", "undoc-members", "show-inheri
 autoapi_python_use_implicit_namespaces = True
 #"show-module-summary"
 
-autoapi_ignore = ['*test*']
+autoapi_ignore = ['*test*', '*pynvml.py']
 autoapi_python_class_content = 'both'
 autoapi_keep_files = True
 
