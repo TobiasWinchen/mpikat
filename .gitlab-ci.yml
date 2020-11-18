@@ -13,8 +13,8 @@ image: edd01:5000/eddbase:latest
 .python3:
   image: nvidia/cuda:10.2-devel-ubuntu18.04
   before_script:
-    - apt-get -y update && apt-get install -y python3-pip python3-pybind11 git #libboost-program-options-dev libboost-system-dev
-    - pip3 install katcp redis coloredlogs numpy #spead2 
+    - apt-get -y update && apt-get install -y python3-pip  python3-git python3-watchdog python3-networkx python3-astropy python3-pybind11 git libboost-program-options-dev libboost-system-dev python3-graphviz
+    - pip3 install katcp redis coloredlogs numpy spead2==1.14.0
 
 
 
@@ -78,12 +78,23 @@ test_debug_output:
   when: on_failure
 
 
+make_doc:
+  stage: test
+  extends: .python3
+
+  script:
+    - pip3 install sphinx sphinxcontrib-apidoc sphinx-rtd-theme sphinx-autodocgen recommonmark  sphinxcontrib-napoleon sphinx-autodoc
+    - cd doc
+    - make html
+
+
 pages:
   stage: deploy
   extends: .production
   dependencies:
     - test_production_gated
     - test_production_base
+    - make_doc
   script:
     - ls -a
     - python-coverage combine .coverage*
@@ -92,9 +103,11 @@ pages:
     - python-coverage report
     - mkdir public
     - mv htmlcov/ public/coverage
+    - mv doc/_build/html/* public/
   artifacts:
     paths:
       - public
   only:
     - dev
     - cicd
+    - doc
