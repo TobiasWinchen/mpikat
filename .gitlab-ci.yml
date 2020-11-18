@@ -84,6 +84,7 @@ pages:
     - test_production_gated
     - test_production_base
   script:
+    - ls -a 
     - python-coverage combine .coverage*
     - python-coverage html
     - python-coverage report
