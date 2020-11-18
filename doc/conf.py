@@ -28,7 +28,8 @@ author = 'The mpikat developers'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinxcontrib.apidoc',
-        'sphinx.ext.napoleon', 'sphinx_rtd_theme', 'sphinx.ext.viewcode', 'recommonmark']
+        'sphinx.ext.napoleon', 'sphinx_rtd_theme',  'recommonmark']
+# 'sphinx.ext.viewcode',
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -39,11 +40,26 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 
-apidoc_module_dir = '../mpikat'
-apidoc_output_dir = '_reference'
-apidoc_excluded_paths = ['tests', '*test*']
-apidoc_separate_modules = True
-apidoc_module_first = True
+#apidoc_module_dir = '../mpikat'
+#apidoc_output_dir = '_reference'
+#apidoc_excluded_paths = ['tests', '*test*']
+#apidoc_separate_modules = True
+#apidoc_module_first = True
+
+
+#AUTOAPI
+extensions.append('autoapi.extension')
+
+autoapi_type = 'python'
+autoapi_dirs = ["../mpikat", "../scripts"]
+autoapi_add_toctree_entry = False
+autoapi_options = ["members", "inherited-members", "undoc-members", "show-inheritance-diagram", "show-inheritance", "imported-members"]
+autoapi_python_use_implicit_namespaces = True
+#"show-module-summary"
+
+autoapi_ignore = ['*test*']
+autoapi_python_class_content = 'both'
+autoapi_keep_files = True
 
 
 # -- Options for HTML output -------------------------------------------------

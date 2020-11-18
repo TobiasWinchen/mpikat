@@ -1,16 +1,18 @@
 .. include:: ../README.md
 
-
-.. toctree::
-   :caption: Project Info
-   :maxdepth: 1
-
-
 .. toctree::
    :caption: API
    :maxdepth: 2
 
-   _reference/mpikat.rst
+   mpikat <autoapi/mpikat/index.rst>
+   katcp_cli <autoapi/scripts/katcp_cli/index.rst>
+   send-config <autoapi/scripts/send_config/index.rst>
+
+.. toctree::
+   :caption: Links
+   :maxdepth: 1
+
+   Repository <https://gitlab.mpcdf.mpg.de/mpifr-bdg/mpikat>
 
 
 
