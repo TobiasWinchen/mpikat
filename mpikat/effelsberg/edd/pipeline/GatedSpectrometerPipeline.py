@@ -605,7 +605,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
-            yield command_watcher(cmd)
+            yield command_watcher(cmd, allow_fail=True)
 
         self._dada_buffers = []
 
