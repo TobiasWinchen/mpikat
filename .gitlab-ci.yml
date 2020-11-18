@@ -79,8 +79,9 @@ test_debug_output:
 
 pages:
   stage: deploy
+  extends: .production
   dependencies:
-    #    - test_production_gated
+    - test_production_gated
     - test_production_base
   script:
     - python-coverage combine
@@ -92,3 +93,4 @@ pages:
       - public
   only:
     - dev
+    - cicd
