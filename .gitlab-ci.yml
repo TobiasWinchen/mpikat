@@ -4,17 +4,31 @@ stages:
 
 image: edd01:5000/eddbase:latest
 
+# Change pip's cache directory to be inside the project directory since we can
+# only cache local items.
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+cache:
+  paths:
+    - .cache/pip
+    - .cache/apt
 
 .production:
   image: edd01:5000/eddbase
   before_script:
+    #    - mkdir -p .cache/apt/
+    #    - cp -r .cache/apt/* /var/cache/apt
     - apt-get -y update && apt-get install -y python-ipaddress python-coverage
+      #    - cp -r /var/cache/apt .cache/apt/
 
 .python3:
   image: nvidia/cuda:10.2-devel-ubuntu18.04
   before_script:
+    #    - mkdir -p .cache/apt/
+    #    - cp -r .cache/apt/* /var/cache/apt
     - apt-get -y update && apt-get install -y python3-pip  python3-git python3-watchdog python3-networkx python3-astropy python3-pybind11 git libboost-program-options-dev libboost-system-dev python3-graphviz
-    - pip3 install katcp redis coloredlogs numpy spead2==1.14.0
+      #    - cp -r /var/cache/apt .cache/apt/
+    - pip3 install katcp redis coloredlogs numpy spead2==1.14.0 sphinx sphinxcontrib-apidoc sphinx-rtd-theme recommonmark  sphinxcontrib-napoleon sphinx-autoapi
 
 
 
@@ -35,10 +49,14 @@ test_python3:
   extends: .python3
   script:
     - python3 test.py
+    - cd doc
+    - make html
   only:
     - pushes
     - merge_requests
-
+  artifacts:
+    paths:
+      - doc/_build
 
 
 test_production_gated:
@@ -78,15 +96,6 @@ test_debug_output:
   when: on_failure
 
 
-make_doc:
-  stage: test
-  extends: .python3
-
-  script:
-    - pip3 install sphinx sphinxcontrib-apidoc sphinx-rtd-theme sphinx-autodocgen recommonmark  sphinxcontrib-napoleon sphinx-autodoc
-    - cd doc
-    - make html
-
 
 pages:
   stage: deploy
@@ -94,7 +103,7 @@ pages:
   dependencies:
     - test_production_gated
     - test_production_base
-    - make_doc
+    - test_python3
   script:
     - ls -a
     - python-coverage combine .coverage*
