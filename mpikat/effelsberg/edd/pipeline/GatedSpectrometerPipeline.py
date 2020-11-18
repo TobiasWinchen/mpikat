@@ -148,6 +148,7 @@ DEFAULT_CONFIG = {
         "output_directory": "/mnt",                         # ToDo: Should be a output data stream def.
         "output_type": 'network',                           # ['network', 'disk', 'null']  ToDo: Should be a output data stream def.
         "dummy_input": False,                               # Use dummy input instead of mkrecv process. Should be input data stream option.
+        "nonfatal_numacheck": False,                             # Ignore numa node constraints, e.g. due to missing networksi for debugging 
         "log_level": "debug",
 
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
@@ -375,7 +376,11 @@ class GatedSpectrometerPipeline(EDDPipeline):
         log.debug("{} numa nodes remaining in pool after constraints.".format(len(self.__numa_node_pool)))
 
         if len(self._config['input_data_streams']) > len(self.__numa_node_pool):
-            raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['input_data_streams'])))
+            if self._config['nonfatal_numacheck']:
+                log.warning("Not enough numa nodes to process data!")
+                self.__numa_node_pool = numa.getInfo().keys()
+            else:
+                raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['input_data_streams'])))
 
         self._subprocessMonitor = SubprocessMonitor()
         #ToDo: Check that all input data streams have the same format, or allow different formats
