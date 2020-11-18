@@ -47,8 +47,9 @@ test_production_gated:
   stage: test
   script:
     - cp testing_tools/dummy_numa_ctl.py /usr/bin/numactl
-    - python setup.py install
-    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
+    - rm -r /usr/local/lib/python2.7/dist-packages/mpikat-0.1-py2.7.egg/
+    - cp mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py .
+    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" testGatedPipeline.py
   only:
     - pushes
     - merge_requests
@@ -79,12 +80,16 @@ test_debug_output:
 
 pages:
   stage: deploy
+  extends: .production
   dependencies:
-    #    - test_production_gated
+    - test_production_gated
     - test_production_base
   script:
-    - python-coverage combine
+    - ls -a
+    - python-coverage combine .coverage*
+    - ls -a
     - python-coverage html
+    - python-coverage report
     - mkdir public
     - mv htmlcov/ public/coverage
   artifacts:
@@ -92,3 +97,4 @@ pages:
       - public
   only:
     - dev
+    - cicd
