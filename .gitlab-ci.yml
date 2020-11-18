@@ -86,6 +86,7 @@ pages:
   script:
     - python-coverage combine .coverage*
     - python-coverage html
+    - python-coverage report
     - mkdir public
     - mv htmlcov/ public/coverage
   artifacts:
