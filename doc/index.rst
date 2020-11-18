@@ -1,18 +1,16 @@
-Welcome to mpikat's documentation!
-==================================
-
-
-.. automodule:: mpikat.utils
-    :members:
-
-
-
-
+.. include:: ../README.md
 
 
 .. toctree::
+   :caption: Project Info
+   :maxdepth: 1
+
+
+.. toctree::
+   :caption: API
    :maxdepth: 2
-   :caption: Contents:
+
+   _reference/mpikat.rst
 
 
 

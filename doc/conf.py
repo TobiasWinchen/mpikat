@@ -28,7 +28,7 @@ author = 'The mpikat developers'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinxcontrib.apidoc',
-        'sphinx.ext.napoleon', 'sphinx_rtd_theme', 'sphinx.ext.viewcode', ]
+        'sphinx.ext.napoleon', 'sphinx_rtd_theme', 'sphinx.ext.viewcode', 'recommonmark']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -52,6 +52,15 @@ apidoc_module_first = True
 # a list of builtin themes.
 #
 html_theme = "sphinx_rtd_theme"
+
+html_theme_options = {
+        'collapse_navigation': False,
+#        'canonical_url': "https:// ... /",
+        'logo_only': True,
+        'display_version': False,
+        }
+
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
