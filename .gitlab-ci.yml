@@ -84,7 +84,7 @@ pages:
     - test_production_gated
     - test_production_base
   script:
-    - python-coverage combine
+    - python-coverage combine .coverage*
     - python-coverage html
     - mkdir public
     - mv htmlcov/ public/coverage
