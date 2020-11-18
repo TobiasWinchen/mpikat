@@ -4,13 +4,14 @@ from mpikat.effelsberg.edd.pipeline.GatedFullStokesSpectrometerPipeline import G
 from katcp import FailReply
 import unittest
 import tornado.testing
+import tornado.gen
 
 import logging
 
-class TestEDDPipeline(tornado.testing.AsyncTestCase):
-    @tornado.testing.gen_test(timeout=120)
-    def test_sequence(self):
-        pipeline = GatedFullStokesSpectrometerPipeline("localhost", 1234)
+class TestGatedSpectrometer(tornado.testing.AsyncTestCase):
+
+    @tornado.gen.coroutine
+    def __test_sequence(self, pipeline):
         self.assertEqual(pipeline.state, 'idle')
         result = pipeline.configure('{"nonfatal_numacheck":true,"dummy_input":true,"output_type":"null"}')
         self.assertEqual(pipeline.state, 'configuring')
@@ -37,6 +38,17 @@ class TestEDDPipeline(tornado.testing.AsyncTestCase):
         # pycoverage wont exit
         yield pipeline.deconfigure()
         self.assertEqual(pipeline.state, 'idle')
+
+
+    @tornado.testing.gen_test(timeout=120)
+    def test_FullStokes_sequence(self):
+        pipeline = GatedFullStokesSpectrometerPipeline("localhost", 1234)
+        yield self.__test_sequence(pipeline)
+
+    @tornado.testing.gen_test(timeout=120)
+    def test_2Pol_sequence(self):
+        pipeline = GatedSpectrometerPipeline("localhost", 1234)
+        yield self.__test_sequence(pipeline)
 
 
 if __name__ == '__main__':
