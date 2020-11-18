@@ -41,7 +41,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 apidoc_module_dir = '../mpikat'
 apidoc_output_dir = '_reference'
-apidoc_excluded_paths = ['tests']
+apidoc_excluded_paths = ['tests', '*test*']
 apidoc_separate_modules = True
 apidoc_module_first = True
 
