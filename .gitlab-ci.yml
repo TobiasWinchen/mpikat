@@ -2,16 +2,53 @@ stages:
   - test
   - deploy
 
-
-image: edd01:5000/edd_gated_stokes
-before_script:
-  - apt-get -y update && apt-get install -y python-ipaddress python-coverage
+image: edd01:5000/eddbase:latest
 
 
-execute_unit_tests:
+.production:
+  image: edd01:5000/eddbase
+  before_script:
+    - apt-get -y update && apt-get install -y python-ipaddress python-coverage
+
+.python3:
+  image: nvidia/cuda:10.2-devel-ubuntu18.04
+  before_script:
+    - apt-get -y update && apt-get install -y python3-pip python3-pybind11 git #libboost-program-options-dev libboost-system-dev
+    - pip3 install katcp redis coloredlogs numpy #spead2 
+
+
+
+test_production_base:
+  stage: test
+  extends: .production
+  script:
+    - python-coverage run  -p --omit "*/site-packages/*,*test*" --source="mpikat" test.py
+  only:
+    - pushes
+    - merge_requests
+  artifacts:
+    untracked: true
+    when: always
+
+test_python3:
+  stage: test
+  extends: .python3
+  script:
+    - python3 test.py
+  only:
+    - pushes
+    - merge_requests
+
+
+
+test_production_gated:
+  image: edd01:5000/edd_gated_stokes
+  extends: .production
   stage: test
   script:
-    - python2-coverage run  --omit "*/site-packages/*,*test*" --source="mpikat" test.py
+    - cp testing_tools/dummy_numa_ctl.py /usr/bin/numactl
+    - python setup.py install
+    - python-coverage run -p --omit "*/site-packages/*,*test*" --source="mpikat" mpikat/effelsberg/edd/pipeline/test/testGatedPipeline.py
   only:
     - pushes
     - merge_requests
@@ -20,22 +57,21 @@ execute_unit_tests:
     when: always
 
 
-test_coverage:
-  stage: deploy
-  dependencies:
-    - execute_unit_tests
-  script:
-    - python2-coverage xml
-  artifacts:
-    reports:
-      cobertura: coverage.xml
-  when: on_success
+    #test_coverage:
+    #  stage: deploy
+    #  dependencies:
+    #    - test_production_gated
+    #    - test_production_base
+    #  script:
+    #    - python2-coverage xml
+    #  artifacts:
+    #    reports:
+    #      cobertura: coverage.xml
+    #  when: on_success
 
 
 test_debug_output:
   stage: deploy
-  dependencies:
-    - execute_unit_tests
   script:
     - cat debug.log
   when: on_failure
@@ -44,8 +80,10 @@ test_debug_output:
 pages:
   stage: deploy
   dependencies:
-    - execute_unit_tests
+    #    - test_production_gated
+    - test_production_base
   script:
+    - python-coverage combine
     - python-coverage html
     - mkdir public
     - mv htmlcov/ public/coverage

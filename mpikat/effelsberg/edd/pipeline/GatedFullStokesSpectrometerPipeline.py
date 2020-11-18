@@ -134,6 +134,7 @@ DEFAULT_CONFIG = {
         "output_directory": "/mnt",                         # ToDo: Should be a output data stream def.
         "output_type": 'network',                           # ['network', 'disk', 'null']  ToDo: Should be a output data stream def.
         "dummy_input": False,                               # Use dummy input instead of mkrecv process. Should be input data stream option.
+        "nonfatal_numacheck": False,                             # Ignore numa node constraints, e.g. due to missing networksi for debugging 
         "log_level": "debug",
 
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
@@ -361,7 +362,11 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         log.debug("{} numa nodes remaining in pool after constraints.".format(len(self.__numa_node_pool)))
 
         if len(self.__numa_node_pool) == 0:
-            raise FailReply("Not enough numa nodes to process data!")
+            if self._config['nonfatal_numacheck']:
+                log.warning("Not enough numa nodes to process data!")
+                self.__numa_node_pool = numa.getInfo().keys()
+            else:
+                raise FailReply("Not enough numa nodes to process data!")
 
         self._subprocessMonitor = SubprocessMonitor()
 
@@ -373,7 +378,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
         self.stream_description["ip"] += ",{}".format(self._config['input_data_streams'].items()[1][1]["ip"])
         log.debug("Merged ip ranges: {}".format(self.stream_description["ip"]))
 
-        self.input_heapSize =  self.stream_description["samples_per_heap"] * self.stream_description['bit_depth'] / 8
+        self.input_heapSize =  self.stream_description["samples_per_heap"] * self.stream_description['bit_depth'] // 8
 
         nHeaps = self._config["samples_per_block"] / self.stream_description["samples_per_heap"]
         input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
@@ -535,6 +540,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
             self.mkrec_cmd.append(mk)
             self._subprocessMonitor.add(mk, self._subprocess_error)
+            self._subprocesses.append(mk)
 
         except Exception as E:
             log.error("Error starting pipeline: {}".format(E))
@@ -597,7 +603,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
             k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
-            yield command_watcher(cmd)
+            yield command_watcher(cmd, allow_fail=True)
 
         self._dada_buffers = []
 

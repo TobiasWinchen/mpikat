@@ -89,7 +89,7 @@ def updateInfo():
                     struct.pack('256s', device[:15].encode('ascii')))[20:24])
                 __numaInfo[node]["net_devices"][device]['ip'] = ip
             except IOError as e:
-                logging.warning(" Cannot associate device {} to a node: {}".format(device, e))
+                logging.warning(" Cannot associate device {} to a node: {}".format(device, node))
 
             d = "/sys/class/net/" + device + "/speed"
             speed = 0
@@ -97,7 +97,7 @@ def updateInfo():
                 try:
                     speed = open(d).read()
                 except:
-                    logging.warning(" Cannot acess speed for device {}: {}".format(device, e))
+                    logging.warning(" Cannot acess speed for device {}: {}".format(device, node))
 
             __numaInfo[node]["net_devices"][device]['speed'] = int(speed)
 
@@ -110,7 +110,7 @@ def updateInfo():
         handle = pynvml.nvmlDeviceGetHandleByIndex(i)
         pciInfo = pynvml.nvmlDeviceGetPciInfo(handle)
 
-        d = '/sys/bus/pci/devices/' + pciInfo.busId + "/numa_node"
+        d = '/sys/bus/pci/devices/' + pciInfo.busId.decode('ascii') + "/numa_node"
         node = open(d).read().strip()
         if node not in __numaInfo:
             logging.debug("Device on node {}, but node not in list of nodes. Possible node was deacitvated.".format(node))
@@ -135,8 +135,12 @@ def getFastestNic(numa_node=None):
     """
     if numa_node is not None:
         nics = getInfo()[numa_node]["net_devices"]
-        fastest_nic = max(nics.keys(), key=lambda k: nics[k]['speed'])
-        return fastest_nic, nics[fastest_nic]
+        if nics:
+            fastest_nic = max(nics.keys(), key=lambda k: nics[k]['speed'])
+            return fastest_nic, nics[fastest_nic]
+        else:
+            logging.warning("Using dummy nic - are you in debug mode?")
+            return "dummy_nic", {"ip":"127.0.0.1","speed":12345}
     else:
         f = None
         d = None
@@ -148,6 +152,10 @@ def getFastestNic(numa_node=None):
            f = fn
            d = fnd
            d['node'] = node
+        if not f:
+            logging.warning("Using dummy nic - are you in debug mode?")
+            return "dummy_nic", {"ip":"127.0.0.1","speed":12345}
+
         return f, d
 
 
