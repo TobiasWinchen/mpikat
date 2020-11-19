@@ -28,7 +28,7 @@ author = 'The mpikat developers'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinxcontrib.apidoc',
-        'sphinx.ext.napoleon', 'sphinx_rtd_theme',  'recommonmark']
+        'sphinx.ext.napoleon', 'sphinx_rtd_theme',  'recommonmark', 'sphinx.ext.intersphinx']
 # 'sphinx.ext.viewcode',
 
 # Add any paths that contain templates here, relative to this directory.
@@ -53,13 +53,23 @@ extensions.append('autoapi.extension')
 autoapi_type = 'python'
 autoapi_dirs = ["../mpikat", "../scripts"]
 autoapi_add_toctree_entry = False
-autoapi_options = ["members", "inherited-members", "undoc-members", "show-inheritance-diagram", "show-inheritance", "imported-members"]
+autoapi_options = ["members", "inherited-members", "show-inheritance-diagram", "show-inheritance", "imported-members"]
 autoapi_python_use_implicit_namespaces = True
 #"show-module-summary"
 
 autoapi_ignore = ['*test*', '*pynvml.py']
 autoapi_python_class_content = 'both'
 autoapi_keep_files = True
+
+
+#########################################################################
+# Intersphinx
+########################################################################
+
+intersphinx_mapping = {
+        'katcp': ('https://pythonhosted.org/katcp/', None),
+        }
+
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -76,7 +86,7 @@ html_theme_options = {
         'display_version': False,
         }
 
-
+html_show_sourcelink = False
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

@@ -1,5 +1,15 @@
 .. include:: ../README.md
 
+
+
+
+Contents
+--------
+
+.. toctree::
+
+   Home <http://mpifr-bdg.pages.mpcdf.de/mpikat/>
+
 .. toctree::
    :caption: API
    :maxdepth: 2
@@ -13,12 +23,7 @@
    :maxdepth: 1
 
    Repository <https://gitlab.mpcdf.mpg.de/mpifr-bdg/mpikat>
+   Test-Coverage <http://mpifr-bdg.pages.mpcdf.de/mpikat/coverage/>
 
+   :ref:`genindex`
 
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
