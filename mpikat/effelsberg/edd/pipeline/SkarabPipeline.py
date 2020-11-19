@@ -137,15 +137,10 @@ class SkarabPipeline(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        @brief   Configure the Skarab PFb Pipeline
+        Configure the Skarab PFb Pipeline
 
-        @param   config_json    A JSON dictionary object containing configuration information
-
-        @detail  The configuration dictionary is highly flexible - settings relevant for non experts are:
-                 @code
-                     {
-                     }
-                 @endcode
+        Args:
+            config_json    A JSON dictionary object containing configuration information
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))

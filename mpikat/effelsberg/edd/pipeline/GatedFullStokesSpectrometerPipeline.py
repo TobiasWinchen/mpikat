@@ -40,11 +40,7 @@ import tempfile
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedFullStokesSpectrometerPipeline")
 
-# DADA BUFFERS TO BE USED
-DADABUFFERS = ["dada"]
-
-
-DEFAULT_CONFIG = {
+__DEFAULT_CONFIG = {
         "id": "GatedFullStokesSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "GatedFullStokesSpectrometer",
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
@@ -141,12 +137,9 @@ DEFAULT_CONFIG = {
     }
 
 
-
-NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
-
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
-mkrecv_header = """
+__mkrecv_header = """
 ## Dada header configuration
 HEADER          DADA
 HDR_VERSION     1.0
@@ -183,7 +176,7 @@ SCI_LIST            2
 
 # static configuration for mksend. all items that can be configured are passed
 # via cmdline
-mksend_header = """
+__mksend_header = """
 HEADER          DADA
 HDR_VERSION     1.0
 HDR_SIZE        4096
@@ -232,14 +225,14 @@ ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 
 
 class GatedFullStokesSpectrometerPipeline(EDDPipeline):
-    """@brief gated spectrometer pipeline
+    """Gated spectrometer pipeline
     """
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
     def __init__(self, ip, port):
-        """@brief initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
+        """initialize the pipeline."""
+        EDDPipeline.__init__(self, ip, port, __DEFAULT_CONFIG)
         self.mkrec_cmd = []
         self._dada_buffers = []
         self.__dada_key = "dada"  # key of inpt buffer, output is inverse
@@ -248,7 +241,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        Setup monitoring sensors
         """
         EDDPipeline.setup_sensors(self)
 
@@ -294,8 +287,8 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
-         @brief Create a ring buffer of given size with given key on specified numa node.
-                Adds and register an appropriate sensor to thw list
+         Create a ring buffer of given size with given key on specified numa node.
+         Adds and register an appropriate sensor to thw list
          """
          # always clear buffer first. Allow fail here
          yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
@@ -311,7 +304,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
     def _buffer_status_handle(self, status):
         """
-        @brief Process a change in the buffer status
+        Process a change in the buffer status
         """
         if status['key'] == self.__dada_key:
             self._input_buffer_total_write.set_value(status['written'])
@@ -326,17 +319,10 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        @brief   Configure the EDD gated spectrometer
+        Configure the EDD gated spectrometer
 
-        @param   config_json    A JSON dictionary object containing configuration information
-
-        @detail  The configuration dictionary is highly flexible - settings relevant for non experts are:
-                 @code
-                     {
-                            "fft_length": 1024 * 1024 * 2 * 8,
-                            "naccumulate": 32,
-                     }
-                 @endcode
+        Args:
+            config_json:    A JSON dictionary object containing configuration information
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -452,7 +438,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
         if self._config["output_type"] == 'network':
             mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
-            mksend_header_file.write(mksend_header)
+            mksend_header_file.write(__mksend_header)
             mksend_header_file.close()
 
             nhops = len(ip_range)
@@ -500,7 +486,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
             mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
             log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-            mkrecvheader_file.write(mkrecv_header)
+            mkrecvheader_file.write(__mkrecv_header)
             # DADA may need this
             # ToDo: Check for input stream definitions
             mkrecvheader_file.write("NBIT {}\n".format(self.stream_description["bit_depth"]))

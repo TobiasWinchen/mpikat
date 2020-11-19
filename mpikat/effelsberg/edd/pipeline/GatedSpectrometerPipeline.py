@@ -44,7 +44,6 @@ import tempfile
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
 
 # DADA BUFFERS TO BE USED
-DADABUFFERS = ["dada", "dadc"]
 
 
 #class DadaBuffer:
@@ -83,7 +82,7 @@ DADABUFFERS = ["dada", "dadc"]
 
 
 
-DEFAULT_CONFIG = {
+__DEFAULT_CONFIG = {
         "id": "GatedSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "GatedSpectrometer",
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
@@ -155,11 +154,10 @@ DEFAULT_CONFIG = {
         "idx1_modulo": "auto",
     }
 
-NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
 
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
-mkrecv_header = """
+__mkrecv_header = """
 ## Dada header configuration
 HEADER          DADA
 HDR_VERSION     1.0
@@ -193,7 +191,7 @@ SCI_LIST            2
 
 # static configuration for mksend. all items that can be configured are passed
 # via cmdline
-mksend_header = """
+__mksend_header = """
 HEADER          DADA
 HDR_VERSION     1.0
 HDR_SIZE        4096
@@ -247,7 +245,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def __init__(self, ip, port):
         """@brief initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
+        EDDPipeline.__init__(self, ip, port, __DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []
@@ -341,17 +339,10 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        @brief   Configure the EDD gated spectrometer
+        Configure the EDD gated spectrometer
 
-        @param   config_json    A JSON dictionary object containing configuration information
-
-        @detail  The configuration dictionary is highly flexible - settings relevant for non experts are:
-                 @code
-                     {
-                            "fft_length": 1024 * 1024 * 2 * 8,
-                            "naccumulate": 32,
-                     }
-                 @endcode
+        Args:
+            config_json    A JSON dictionary object containing configuration information
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -387,7 +378,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         for i, streamid in enumerate(self._config['input_data_streams']):
             # calculate input buffer parameters
             stream_description = self._config['input_data_streams'][streamid]
-            stream_description["dada_key"] = DADABUFFERS[i]
+            stream_description["dada_key"] = ["dada", "dadc"][i]
             self.add_input_stream_sensor(streamid)
             self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] / 8
 
@@ -455,7 +446,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
             if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
-                mksend_header_file.write(mksend_header)
+                mksend_header_file.write(__mksend_header)
                 mksend_header_file.close()
 
                 nhops = len(ip_range)
@@ -504,7 +495,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 stream_description = self._config['input_data_streams'][streamid]
                 mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
                 log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-                mkrecvheader_file.write(mkrecv_header)
+                mkrecvheader_file.write(__mkrecv_header)
                 # DADA may need this
                 # ToDo: Check for input stream definitions
                 mkrecvheader_file.write("NBIT {}\n".format(stream_description["bit_depth"]))
