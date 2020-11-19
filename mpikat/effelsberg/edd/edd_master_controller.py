@@ -59,16 +59,15 @@ class EddMasterController(EDDPipeline):
 
     def __init__(self, ip, port, redis_ip, redis_port, edd_ansible_git_repository_folder, inventory):
         """
-        @brief       Construct new EddMasterController instance
+        Args:
 
-        @params  ip           The IP address on which the server should listen
-        @params  port         The port that the server should bind to
-        @params  redis_ip     IP for conenction to the EDD Datastore
-        @params  redis_port   Port for the comnenctioon to the edd data store
-        @params  edd_ansible_git_repository_folder
-                              Directory of a (checked out) edd_ansible git
-                              repository to be used for provisioning
-        @params inventory to use for ansible
+          ip:           The IP address on which the server should listen
+          port:         The port that the server should bind to
+          redis_ip:     IP for conenction to the EDD Datastore
+          redis_port:   Port for the comnenctioon to the edd data store
+          edd_ansible_git_repository_folder:
+                        Directory of a (checked out) edd_ansible git repository
+                        to be used for provisioning inventory to use for ansible
         """
         EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port), "skip_packetizer_config":False})
 

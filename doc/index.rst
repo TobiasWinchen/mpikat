@@ -3,12 +3,10 @@
 
 
 
-Contents
---------
-
 .. toctree::
+   :hidden:
 
-   Home <http://mpifr-bdg.pages.mpcdf.de/mpikat/>
+   Home <self>
 
 .. toctree::
    :caption: API
@@ -25,5 +23,8 @@ Contents
    Repository <https://gitlab.mpcdf.mpg.de/mpifr-bdg/mpikat>
    Test-Coverage <http://mpifr-bdg.pages.mpcdf.de/mpikat/coverage/>
 
-   :ref:`genindex`
+    
+
+
+:ref:`genindex`
 

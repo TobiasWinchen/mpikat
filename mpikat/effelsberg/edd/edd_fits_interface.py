@@ -1,3 +1,7 @@
+"""
+Pipeline to send spectrometer data to the Effelsberg fits writer (APEX Fits writer).
+"""
+
 from __future__ import print_function, division, unicode_literals
 from tornado.gen import coroutine, sleep
 from tornado.ioloop import PeriodicCallback
@@ -19,7 +23,6 @@ else:
 
 from multiprocessing import Process, Pipe
 
-
 import spead2
 import spead2.recv
 
@@ -33,7 +36,7 @@ log = logging.getLogger("mpikat.edd_fits_interface")
 
 
 # Artificial time delta between noise diode on / off status
-NOISEDIODETIMEDELTA = 0.001
+__NOISEDIODETIMEDELTA = 0.001
 
 
 def conditional_update(sensor, value, status=1, timestamp=None):
@@ -46,7 +49,7 @@ def conditional_update(sensor, value, status=1, timestamp=None):
 
 class FitsWriterConnectionManager(Thread):
     """
-    A class to handle TCP connections to the APEX FITS writer.
+    Manages TCP connections to the APEX FITS writer.
 
     This class implements a TCP/IP server that can accept connections from
     the FITS writer. Upon acceptance, the new communication socket is stored
@@ -417,7 +420,7 @@ class FitsInterfaceServer(EDDPipeline):
             pks.append([ref_time, pkg])
             for t, pkg2 in pks:
                 dt = ref_time - t
-                if abs(abs(dt) - NOISEDIODETIMEDELTA) < NOISEDIODETIMEDELTA / 2:
+                if abs(abs(dt) - __NOISEDIODETIMEDELTA) < __NOISEDIODETIMEDELTA / 2:
                     log.debug(" Matching pair found after looking at {} packages, dt: {}".format(len(pks), dt))
                     found_pair = [pkg, pkg2, min(ref_time, t)]
                     break
@@ -646,12 +649,17 @@ class SpeadCapture(Thread):
 
 
 def fw_factory(nsections, nchannels, data_type = "EEEI", channel_data_type = "F   "):
-    """, fits_interface
-    Crate a APEX compatible fits writer container with
-      * nsections
-      * nchannels
-      * data_type
-      * channel_data_type
+    """
+    Creates APEX fits writer compatible packages.
+
+    Args:
+      nsections (int):             Number of sections.
+      nchannels (int):             Number of channels per section.
+      data_type (str):             Type of data - Only 'EEEI' is supported right now.
+      channel_data_type (str):     Type of channel data  - Only 'F    ' is supported right now.
+
+    References:
+    .. [HAFOK_2018] ]H. Hafok, D. Muders and M. Olberg, 2018, APEX SCPI socket command syntax and backend data stream format, APEX-MPI-ICD-0005 https://www.mpifr-bonn.mpg.de/5274578/APEX-MPI-ICD-0005-R1_1.pdf
     """
     class FWData(ctypes.LittleEndianStructure):
         _pack_ = 1
@@ -703,7 +711,13 @@ def fw_factory(nsections, nchannels, data_type = "EEEI", channel_data_type = "F 
 
 def convert48_64(A):
     """
-    Converts 48 bit to 64 bit integers
+    Converts 48 bit to 64 bit integers.
+
+    Args:
+        A:  array of 6 bytes.
+
+    Returns:
+    int
     """
     assert (len(A) == 6)
     npd = np.array(A, dtype=np.uint64)
@@ -715,6 +729,7 @@ class GatedSpectrometerSpeadHandler(object):
     """
     Parse heaps of gated spectrometer output and aggregate items with matching
     polarizations.
+
     Heaps above a max age will be dropped.
     Complete packages are passed to the fits interface queue
     number of input streams tro handle. half per gate.
@@ -863,7 +878,7 @@ class GatedSpectrometerSpeadHandler(object):
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
-            packet.reference_time += NOISEDIODETIMEDELTA 
+            packet.reference_time += __NOISEDIODETIMEDELTA 
 
         # Update local time
         if packet.reference_time > self.__now:
@@ -935,3 +950,4 @@ class GatedSpectrometerSpeadHandler(object):
 
 if __name__ == "__main__":
     launchPipelineServer(FitsInterfaceServer)
+

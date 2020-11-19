@@ -7,17 +7,16 @@ log = logging.getLogger("mpikat.edd_server_product_controller")
 
 
 class EddServerProductController(object):
-    """
-    """
 
     def __init__(self, product_id, address, port):
         """
-        @brief      Construct new instance
+        Interface for pipeline instances using katcp.
 
-        @param      product_id        A unique identifier for this product
-        @param      r2rm_addr         The address of the R2RM (ROACH2 resource manager) to be
-                                      used by this product. Passed in tuple format,
-                                      e.g. ("127.0.0.1", 5000)
+        Args:
+            product_id:        A unique identifier for this product
+            r2rm_addr:         The address of the R2RM (ROACH2 resource manager) to be
+                     used by this product. Passed in tuple format,
+                     e.g. ("127.0.0.1", 5000)
         """
         log.debug("Installing controller for {} at {}, {}".format(product_id, address, port))
         self.ip = address

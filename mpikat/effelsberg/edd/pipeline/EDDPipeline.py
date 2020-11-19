@@ -96,45 +96,29 @@ class StateChange(Exception):
 
 class EDDPipeline(AsyncDeviceServer):
     """
-    @brief Abstract interface for EDD Pipelines
+    Abstract interface for EDD Pipelines
 
-    @detail Pipelines can implement functions to act within the following
-    sequence of commands with associated state changes:
+    Pipelines can implement functions to act within the following
+    sequence of commands with associated state changes. After provisioning the
+    pipeline is in state idle.
 
-                                               After provisioning the pipeline is in state idle.
-            * ?set "partial config"            After set, it remains in state idle as only the
-                                               config dictionary may have changed. A wrong config
-                                               is rejected without changing state as state remains
-            valid.
-            * ?set "partial config"
-            * ?set "partial config"
-            * ?configure "partial config"      state change from idle to configuring
-                                               and configured (on success) or error (on fail)
-            * ?capture_start                   state change from configured to streaming or ready
-                                               (on success) or error (on fail).
-                                               Streaming indicates that no
-                                               further changes to the state are
-                                               expected and data is injected
-                                               into the EDD.
-            * ?measurement_prepare "data"      state change from ready to set or error
-            * ?measurement_start               state change from set to running or error
-            * ?measurement_stop                state change from running to set or error
-            * ?measurement_prepare "data"
-            * ?measurement_start
-            * ?measurement_stop
-            * ?measurement_prepare "data"      state change from ready to set or error
-            * ?measurement_start               state change from set to running
-            * ?measurement_stop                return to state ready
-            * ?capture_stop                    return to state configured or idle
-            * ?deconfigure                     restore state idle
-
-                                               starting and stopping
-                                               may be used as
-                                               intermediate states for
-                                               capture_start /
-                                               capture_stop /
-                                               measurement_start,
-                                               measurement_stop
+        * ?set "partial config"            After set, it remains in state idle as only the
+                                           config dictionary may have changed. A wrong config
+                                           is rejected without changing state as state remains
+                                           valid. Multiple set commands can bes end to the pipeline.
+        * ?configure "partial config"      state change from idle to configuring
+                                           and configured (on success) or error (on fail)
+        * ?capture_start                   state change from configured to streaming or ready
+                                           (on success) or error (on fail).
+                                           Streaming indicates that no
+                                           further changes to the state are
+                                           expected and data is injected
+                                           into the EDD.
+        * ?measurement_prepare "data"      state change from ready to set or error
+        * ?measurement_start               state change from set to running or error
+        * ?measurement_stop                state change from running to set or error
+        * ?capture_stop                    return to state configured or idle
+        * ?deconfigure                     restore state idle
 
     * set - updates the current configuration with the provided partial config. This
             is handled entirely within the parent class which updates the member
@@ -152,7 +136,6 @@ class EDDPipeline(AsyncDeviceServer):
 
     Pipelines can also implement:
         * populate_data_store to send data to the store. The address and port for a data store is received along the request.
-
     """
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
 
