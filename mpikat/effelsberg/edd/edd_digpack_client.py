@@ -1,4 +1,10 @@
+"""
+Interface and commandline application to katcp controlled digitizer/packetizers.
+"""
+
+
 from __future__ import print_function
+
 import logging
 import time
 from tornado.gen import coroutine, sleep, Return
@@ -7,7 +13,10 @@ from katcp import KATCPClientResource
 
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 
-known_packetizers = {"faraday_room":{"ip":"134.104.73.132","port":7147}, "focus_cabin":{"ip":"134.104.70.65","port":7147}}
+
+# Conveniance settings of known packetizers. Should probably go to a config
+# file
+__known_packetizers = {"faraday_room":{"ip":"134.104.73.132","port":7147}, "focus_cabin":{"ip":"134.104.70.65","port":7147}}
 
 log = logging.getLogger("mpikat.edd_digpack_client")
 
@@ -24,10 +33,11 @@ class DigitiserPacketiserClient(object):
 
     def __init__(self, host, port=7147):
         """
-        @brief      Class for digitiser packetiser client.
+        Wraps katcp commands to controll a digitiser/packetiser.
 
-        @param      host   The host IP or name for the desired packetiser KATCP interface
-        @param      port   The port number for the desired packetiser KATCP interface
+        Args:
+            host:  The host IP or name for the desired packetiser KATCP interface
+            port:  The port number for the desired packetiser KATCP interface
         """
         self._host = host
         self._port = port
@@ -104,16 +114,6 @@ class DigitiserPacketiserClient(object):
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
-
-    @coroutine
-    def flip_spectrum(self, on):
-        """
-        @brief Reverts the spectrum of the data.
-        """
-        if on == True:
-            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
-        else:
-            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
 
     @coroutine
     def set_noise_diode_frequency(self, frequency):
@@ -412,7 +412,7 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser(description="Configures edd digitiezer. By default, send syncronize and capture start along with the given options.")
     parser.add_argument('host', type=str,
-        help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(known_packetizers)))
+        help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(__known_packetizers)))
     parser.add_argument('-p', '--port', dest='port', type=int,
         help='Port number to bind to', default=7147)
     parser.add_argument('--nbits', dest='nbits', type=int,
@@ -439,10 +439,10 @@ if __name__ == "__main__":
     parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
     args = parser.parse_args()
 
-    if args.host in known_packetizers:
+    if args.host in __known_packetizers:
         print("Found {} in known packetizers, use stored lookup ip and port.".format(args.host))
-        args.port = known_packetizers[args.host]['port']
-        args.host = known_packetizers[args.host]['ip']
+        args.port = __known_packetizers[args.host]['port']
+        args.host = __known_packetizers[args.host]['ip']
     print("Configuring paketizer {}:{}".format(args.host, args.port))
     client = DigitiserPacketiserClient(args.host, port=args.port)
 
