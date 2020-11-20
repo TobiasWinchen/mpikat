@@ -53,7 +53,7 @@ extensions.append('autoapi.extension')
 autoapi_type = 'python'
 autoapi_dirs = ["../mpikat", "../scripts"]
 autoapi_add_toctree_entry = False
-autoapi_options = ["members", "inherited-members", "undoc-members", "show-inheritance-diagram", "show-inheritance", "imported-members"]
+autoapi_options = ["members", "undoc-members", "show-inheritance-diagram", "show-inheritance", "imported-members"]
 autoapi_python_use_implicit_namespaces = True
 #"show-module-summary"
 
