@@ -28,7 +28,6 @@ import mpikat.utils.numa as numa
 
 import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
 
-
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Int, Str
 
@@ -55,12 +54,21 @@ else:
     unicode_type = unicode
 
 
-
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
+
 
 def updateConfig(oldo, new):
     """
-    @brief Merge retrieved config [new] into [old] via recursive dict merge
+    Merge retrieved config [new] into [old] via recursive dict merge
+
+    Example::
+
+        >>> old = {'a:': 0, 'b': {'ba':0, 'bb': 0}}
+        >>> new = {'a:': 1, 'b': {'ba':0}}
+
+        >>> print(updateConfig(old, new))
+        {'a:': 1, 'b': {'ba': 2, 'bb': 0}}
+
     """
     old = oldo.copy()
     for k in new:
@@ -75,10 +83,10 @@ def updateConfig(oldo, new):
 
 
 def value_list(d):
+    
     if isinstance(d, dict):
         return d.values()
     else:
-        # Ducktyping
         return d
 
 
@@ -87,7 +95,8 @@ def value_list(d):
 
 class StateChange(Exception):
     """
-    Special exception that causes a state change to a state other than the defined error states.
+    Special exception that causes a state change to a state other than the
+    defined error states.
     """
     pass
 
@@ -101,27 +110,30 @@ class EDDPipeline(AsyncDeviceServer):
     sequence of commands with associated state changes. After provisioning the
     pipeline is in state idle.
 
-        * ?set "partial config"            After set, it remains in state idle as only the
-                                           config dictionary may have changed. A wrong config
-                                           is rejected without changing state as state remains
-                                           valid. Multiple set commands can bes end to the pipeline.
-        * ?configure "partial config"      state change from idle to configuring
-                                           and configured (on success) or error (on fail)
-        * ?capture_start                   state change from configured to streaming or ready
-                                           (on success) or error (on fail).
-                                           Streaming indicates that no
-                                           further changes to the state are
-                                           expected and data is injected
-                                           into the EDD.
-        * ?measurement_prepare "data"      state change from ready to set or error
-        * ?measurement_start               state change from set to running or error
-        * ?measurement_stop                state change from running to set or error
-        * ?capture_stop                    return to state configured or idle
-        * ?deconfigure                     restore state idle
+        ?set "partial config"
+            Updates the current configuration with the provided partial config.
+            After set, it remains in state idle as only the config dictionary
+            may have changed. A wrong config is rejected without changing state
+            as state remains valid. Multiple set commands can bes end to the
+            pipeline.
+        ?configure "partial config"
+            state change from idle to configuring and configured (on success)
+            or error (on fail)
+        ?capture_start
+            state change from configured to streaming or ready (on success) or
+            error (on fail).  Streaming indicates that no further changes to
+            the state are expected and data is injected into the EDD.
+        ?measurement_prepare "data"
+            state change from ready to set or error
+        ?measurement_start
+            state change from set to running or error
+        ?measurement_stop
+            state change from running to set or error
+        ?capture_stop
+            return to state configured or idle
+        ?deconfigure
+            restore state idle
 
-    * set - updates the current configuration with the provided partial config. This
-            is handled entirely within the parent class which updates the member
-            attribute _config.
     * configure - optionally does a final update of the current config and
                   prepares the pipeline. Configuring the pipeline may take time,
                   so all lengthy preparations should be done here.
@@ -148,17 +160,22 @@ class EDDPipeline(AsyncDeviceServer):
 
     def __init__(self, ip, port, default_config={}):
         """
-        @brief Initialize the pipeline. Subclasses are required to provide their default config dict and specify
-                the data formats definied by the class, if any.
+        Initialize the pipeline. Subclasses are required to provide their
+        default config dict and specify the data formats definied by the class,
+        if any.
+
+        Args:
+            ip:             ip to accept connections from
+            port:           port to listen
+            default_config: default config of the pipeline
         """
-        self.callbacks = set()
         self._state = "idle"
         self.previous_state = "unprovisioned"
         self._sensors = []
         # inject data store dat into all default configs.
         default_config.setdefault("data_store", dict(ip="localhost", port=6379))
         default_config.setdefault("id", "Unspecified")
-        default_config.setdefault("type", "Unspecified")
+        default_config.setdefault("type", self.__class__.__name__)
         default_config.setdefault("input_data_streams", [])
         default_config.setdefault("output_data_streams", [])
 
@@ -194,14 +211,16 @@ class EDDPipeline(AsyncDeviceServer):
                 (self.request_measurement_stop, self.measurement_stop)]:
             r.__func__.__doc__ = s.__doc__
 
+
     @property
     def _config(self):
         """
-        @brief The current configuration of the pipeline, i.e. the default
+        The current configuration of the pipeline, i.e. the default
         after all updates received via set and configure commands. This value
         should then be used in the _configure method.
         """
         return self.__config
+
 
     @_config.setter
     def _config(self, value):
@@ -214,9 +233,13 @@ class EDDPipeline(AsyncDeviceServer):
             self.__config = value
             self._configUpdated()
 
+
     def _configUpdated(self):
         """
-        Signals that the config dict has been updated. Seperate method as direct updates of _config items without writing a full dict to _config will noy trigger the _config.setter and have to call this method manually.
+        Signals that the config dict has been updated. Seperate method as
+        direct updates of _config items without writing a full dict to _config
+        will noy trigger the _config.setter and have to call this method
+        manually.
         """
         self._edd_config_sensor.set_value(json.dumps(self.__config, indent=4))
 
@@ -225,9 +248,9 @@ class EDDPipeline(AsyncDeviceServer):
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors.
+        Setup monitoring sensors.
 
-        @detail The EDDPipeline base provides default sensors. Should be called by a subclass.
+        The EDDPipeline base provides default sensors. Should be called by a subclass.
 
         """
         self._pipeline_sensor_status = Sensor.discrete(
@@ -257,9 +280,10 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_set_log_level(self, req, level):
         """
-        @brief     Sets the log level
+        Sets the log level
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        Return:
+            katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         @coroutine
         def wrapper():
@@ -284,14 +308,16 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_whoami(self, req):
         """
-        @brief      Returns the name of the controlled pipeline
+        Returns the name of the controlled pipeline
 
-        @return     katcp reply object
+        Return:
+            katcp reply object
         """
 
         @coroutine
         def wrapper():
             req.reply(self.__class__.__name__)
+#            req.reply("".format(self._config['type'], self._config['id']))
         self.ioloop.add_callback(wrapper)
         raise AsyncReply
 
@@ -302,15 +328,11 @@ class EDDPipeline(AsyncDeviceServer):
         return self._sensors
 
 
-    def notify(self):
-        """@brief callback function."""
-        for callback in self.callbacks:
-            callback(self._state, self)
-
-
     @property
     def state(self):
-        """@brief property of the pipeline state."""
+        """
+        State of the pipeline.
+        """
         return self._state
 
 
@@ -325,14 +347,14 @@ class EDDPipeline(AsyncDeviceServer):
 
     def start(self):
         """
-        @brief    Start the server
+        Start the server
         """
         AsyncDeviceServer.start(self)
 
 
     def stop(self):
         """
-        @brief    Stop the server
+        Stop the server
         """
         AsyncDeviceServer.stop(self)
 
@@ -366,9 +388,10 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_configure(self, req, config_json):
         """
-        @brief      Configure EDD to receive and process data
+        Configure EDD to receive and process data
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        Returns:
+            katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         @coroutine
         def configure_wrapper():
@@ -387,7 +410,9 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def configure(self, config_json=""):
-        """@brief Default method - no effect"""
+        """
+        Default method for configuration.
+        """
         pass
 
 
@@ -395,9 +420,10 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_set_default_config(self, req):
         """
-        @brief      Set the current config to the default config
+        (Re-)set the config to the default.
 
-        @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
+        Returns:
+            katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
         """
 
         logging.info("Setting default configuration")
@@ -410,9 +436,10 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_set(self, req, config_json):
         """
-        @brief      Add the config_json to the current config
+        Add the config_json to the current config
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        Returns:
+            katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -434,7 +461,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def _cfgjson2dict(self, config_json):
         """
-        @brief  Returns the config as dict.
+        Returns the provided config as dict if a json object or returns the object if it already is a dict.
         """
         if isinstance(config_json, str) or isinstance(config_json, unicode_type):
             log.debug("Received config as string:\n  {}".format(config_json))
@@ -458,9 +485,16 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def set(self, config_json):
         """
-        @brief      Add the config_json to the current config. Input / output data streams will be filled with default values if not provided.
+        Add the config_json to the current config. Input / output data streams
+        will be filled with default values if not provided.
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        The configuration will be rejected if no corresponding value is present
+        in the default config. A warnign is emitted on type changes.
+
+        The final configuration is stored in self._config for access in derived classes.
+
+        Returns:
+            katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
         log.debug("Updating configuration: '{}'".format(config_json))
@@ -489,15 +523,13 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_capture_start(self, req):
         """
-        @brief      Start the EDD backend processing
+        Start the EDD backend processing
 
-        @note       This method may be updated in future to pass a 'scan configuration' containing
-                    source and position information necessary for the population of output file
-                    headers.
+        Note:
+            This is the KATCP wrapper for the capture_start command
 
-        @note       This is the KATCP wrapper for the capture_start command
-
-        @return     katcp reply object [[[ !capture_start ok | (fail [error description]) ]]]
+        Returns:
+            katcp reply object [[[ !capture_start ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -531,7 +563,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     def watchdog_error(self):
         """
-        @brief Set error mode requested by watchdog.
+        Set error mode requested by watchdog.
         """
         log.error("Error state requested by watchdog!")
         self.state = "error"
@@ -539,7 +571,9 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def capture_start(self):
-        """@brief Default method - no effect"""
+        """
+        Default method - no effect
+        """
         pass
 
 
@@ -547,11 +581,13 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_capture_stop(self, req):
         """
-        @brief      Stop the EDD backend processing
+        Stop the EDD backend processing
 
-        @note       This is the KATCP wrapper for the capture_stop command
+        Note:
+            This is the KATCP wrapper for the capture_stop command
 
-        @return     katcp reply object [[[ !capture_stop ok | (fail [error description]) ]]]
+        Return:
+            katcp reply object [[[ !capture_stop ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -572,7 +608,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def capture_stop(self):
-        """@brief Default method - no effect"""
+        """Default method - no effect"""
         pass
 
 
@@ -580,9 +616,10 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_measurement_prepare(self, req, config_json):
         """
-        @brief      Prepare measurement request
+        Prepare measurement request
 
-        @return     katcp reply object [[[ !measurement_prepare ok | (fail [error description]) ]]]
+        Return:
+            katcp reply object [[[ !measurement_prepare ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -603,7 +640,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def measurement_prepare(self, config_json=""):
-        """@brief Default method - no effect"""
+        """Default method - no effect"""
         pass
 
 
@@ -612,11 +649,13 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_measurement_start(self, req):
         """
-        @brief      Start
+        Start emasurement.
 
-        @note       This is the KATCP wrapper for the measurement_start command
+        Note:
+            This is the KATCP wrapper for the measurement_start command
 
-        @return     katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
+        Return:
+            katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -637,7 +676,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def measurement_start(self):
-        """@brief Default method - no effect"""
+        """Default method - no effect"""
         pass
 
 
@@ -645,11 +684,13 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_measurement_stop(self, req):
         """
-        @brief      Start
+        Stop  measurement
 
-        @note       This is the KATCP wrapper for the measurement_stop command
+        Note:
+            This is the KATCP wrapper for the measurement_stop command
 
-        @return     katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
+        Return:
+            katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -670,18 +711,20 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def measurement_stop(self):
-        """@brief Default method - no effect"""
+        """Default method - no effect"""
         pass
 
     @request()
     @return_reply()
     def request_deconfigure(self, req):
         """
-        @brief      Deconfigure the pipeline.
+        Deconfigure the pipeline.
 
-        @note       This is the KATCP wrapper for the deconfigure command
+        Note:
+            This is the KATCP wrapper for the deconfigure command
 
-        @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
+        Return:
+            katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
 
         @coroutine
@@ -699,16 +742,16 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def deconfigure(self):
-        """@brief Default method - no effect"""
+        """Default method - no effect"""
         pass
 
     @request(include_msg=True)
     @return_reply()
     def request_register(self, req, msg):
         """
-        @brief Register the pipeline in the datastore. Optionally the data store can be specified as "ip:port". If not specified the value in the configuration will be used.
+        Register the pipeline in the datastore. Optionally the data store can be specified as "ip:port". If not specified the value in the configuration will be used.
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         log.debug("regsiter request")
         @coroutine
@@ -736,7 +779,14 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def register(self, host=None, port=None):
-        """@brief Populate the data store"""
+        """
+        Registers the pipeline in the data store.
+
+        Args:
+            host, port: Ip and port of the data store.
+
+        If no host and port ar eprovided, values from the internal config are used.
+        """
         if host == None:
             log.debug("No host provided. Use value from current config.")
             host = self.config["data_store"]["ip"]
@@ -752,15 +802,30 @@ class EDDPipeline(AsyncDeviceServer):
 
 def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abortwaitfor=['deconfiguring', 'error', 'panic'], intermediate=None, error='error', timeout=120):
     """
-    @brief decorator to perform a state change in a method
+    Decorator to perform a state change in a method.
 
-    @param        target: target state
-    @param       allowed: Allowed source states
-    @param  intermediate: Intermediate state to assume while executing
-    @param         error: State to assume on error
-    @param       waitfor: Wait with the state changes until the current state set
-    @param  abortwaitfor: States that result in aborting the wait (with Failure)
-    @param       timeout: If state change is not completed after [timeout] seconds, error state is assumed. Timeout can be None to wait indefinitely
+    Args:
+       target (str):          Target state.
+       allowed (list):        Allowed source states.
+       intermediate (str):    Intermediate state assumed while executing.
+       error (str):           State assumed if an exception reached the decorator.
+       waitfor (str):         Wait with the state changes until the current state set.
+       abortwaitfor (list):   States that result in aborting the wait (with Failure).
+       timeout (int):         If state change is not completed after [timeout] seconds, error state is assumed. Timeout can be None to wait indefinitely.
+
+    Example:
+
+       State transition from idle->configure (or error) via configuring.::
+
+         @state_change(target="configured", allowed=["idle"], intermediate="configuring")
+         @coroutine
+         def configure(self, config_json):
+             pass
+
+
+    Note:
+        If more than one valid target or error state is possible, the final
+        state has to be indicated by throwing a StateChange exception.
     """
     def decorator_state_change(func):
         @functools.wraps(func)
@@ -806,6 +871,9 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, waitfor=None, abor
 
 @coroutine
 def on_shutdown(ioloop, server):
+    """
+    Shut down the server and stop the ioloop.
+    """
     log.info("Shutting down server")
     yield server.stop()
     ioloop.stop()
@@ -813,7 +881,12 @@ def on_shutdown(ioloop, server):
 
 def getArgumentParser(description = "", include_register_command=True):
     """
-    @brief Provide a arguemnt parser with standard arguments for all pipelines.
+    Creates an argument parser with standard arguments for all pipelines. By
+    this all pipeliens have a standard set of commandline options for pipelien
+    start and stop.
+
+    Returns:
+        ArgumentParser
     """
     parser = ArgumentParser(description=description)
     parser.add_argument('-H', '--host', dest='host', type=str, default='localhost',
@@ -848,10 +921,33 @@ def setup_logger(args):
 
 def launchPipelineServer(Pipeline, args=None):
     """
-    @brief Launch a Pipeline server.
+    Launch a pipeline server and install signal-handler to kill server on Ctrl-C.
 
-    @param Pipeline Instance or ServerClass to launch.
-    @param ArgumentParser args to use for launch.
+    Args:
+        Pipeline: Instance of a pipeline or ServerClass definition to launch.
+        args: ArgumentParser args to use for launch of the pipeline.
+
+    Example:
+        Start a pipeline using a class definition::
+
+            class MyPipeline(EDDPipeline):
+                pass
+
+            launchPipelineServer(MyPipeline)
+
+
+        Starts a pipeline using an instance::
+
+            class MyPipeline(EDDPipeline):
+                pass
+
+            server = MyPipeline()
+
+            launchPipelineServer(server)
+
+
+
+
     """
     if not args:
         parser = getArgumentParser()

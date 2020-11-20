@@ -238,13 +238,12 @@ ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 
 
 class GatedSpectrometerPipeline(EDDPipeline):
-    """@brief gated spectrometer pipeline 
+    """Gated spectrometer pipeline
     """
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
     def __init__(self, ip, port):
-        """@brief initialize the pipeline."""
         EDDPipeline.__init__(self, ip, port, __DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
@@ -253,7 +252,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        Setup the monitoring sensors
         """
         EDDPipeline.setup_sensors(self)
 
@@ -274,7 +273,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def add_input_stream_sensor(self, streamid):
         """
-        @brief add sensors for i/o buffers for an input stream with given streamid.
+        Add sensors for i/o buffers for an input stream with given streamid.
         """
         self._polarization_sensors[streamid] = {}
         self._polarization_sensors[streamid]["mkrecv_sensors"] = MkrecvSensors(streamid)
@@ -306,8 +305,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
-         @brief Create a ring buffer of given size with given key on specified numa node.
-                Adds and register an appropriate sensor to thw list
+         Create a ring buffer of given size with given key on specified numa node.
+         Adds and register an appropriate sensor to thw list
          """
          # always clear buffer first. Allow fail here
          yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
@@ -323,7 +322,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def _buffer_status_handle(self, status):
         """
-        @brief Process a change in the buffer status
+        Process a change in the buffer status
         """
         for streamid, stream_description in self._config["input_data_streams"].items():
             if status['key'] == stream_description['dada_key']:
@@ -487,7 +486,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_start(self, config_json=""):
         """
-        @brief start streaming spectrometer output
+        Start streaming spectrometer output
         """
         log.info("Starting EDD backend")
         try:
@@ -554,7 +553,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_stop(self):
         """
-        @brief Stop streaming of data
+        Stop streaming of data
         """
         log.info("Stoping EDD backend")
         for wd in self.__watchdogs:
@@ -578,7 +577,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def deconfigure(self):
         """
-        @brief deconfigure the gated spectrometer pipeline.
+        Deconfigure the gated spectrometer pipeline.
         """
         log.info("Deconfiguring EDD backend")
         if self.previous_state == 'streaming':
