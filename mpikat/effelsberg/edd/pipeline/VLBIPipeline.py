@@ -1,24 +1,22 @@
-"""
-Copyright (c) 2019 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
+#Copyright (c) 2019 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in all
+#copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#SOFTWARE.
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.sensor_watchdog import SensorWatchdog
@@ -45,9 +43,8 @@ import tempfile
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.VLBIPipeline")
 
 # DADA BUFFERS TO BE USED
-DADABUFFERS = ["dada", "dadc"]
 
-DEFAULT_CONFIG = {
+__DEFAULT_CONFIG = {
 
         "id": "VLBIPipeline",
         "type": "VLBIPipeline",
@@ -116,7 +113,7 @@ DEFAULT_CONFIG = {
 
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
-mkrecv_header = """
+__mkrecv_header = """
 ## Dada header configuration
 HEADER          DADA
 HDR_VERSION     1.0
@@ -181,7 +178,7 @@ class VLBIPipeline(EDDPipeline):
 
     def __init__(self, ip, port):
         """@brief initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
+        EDDPipeline.__init__(self, ip, port, __DEFAULT_CONFIG)
         self._dada_buffers = []
         self.mkrec_cmd = []
 
@@ -274,10 +271,10 @@ class VLBIPipeline(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        @brief   Configure the EDD VLBi pipeline 
+        Configure the EDD VLBi pipeline
 
-        @param   config_json    A JSON dictionary object containing configuration information
-
+        Args:
+            config_json    A JSON dictionary object containing configuration information
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -311,7 +308,7 @@ class VLBIPipeline(EDDPipeline):
         for i, streamid in enumerate(self._config['input_data_streams']):
             # calculate input buffer parameters
             stream_description = self._config['input_data_streams'][streamid]
-            stream_description["dada_key"] = DADABUFFERS[i]
+            stream_description["dada_key"] = ["dada", "dadc"][i]
             self.add_input_stream_sensor(streamid)
             self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] / 8
 
@@ -436,7 +433,7 @@ class VLBIPipeline(EDDPipeline):
                 stream_description = self._config['input_data_streams'][streamid]
                 mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
                 log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-                mkrecvheader_file.write(mkrecv_header)
+                mkrecvheader_file.write(__mkrecv_header)
                 # DADA may need this
                 # ToDo: Check for input stream definitions
                 mkrecvheader_file.write("NBIT {}\n".format(stream_description["bit_depth"]))

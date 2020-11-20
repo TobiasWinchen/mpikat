@@ -1,7 +1,7 @@
-from __future__ import print_function, division, unicode_literals
 """
 Utils to work with IP addresses
 """
+from __future__ import print_function, division, unicode_literals
 
 import ipaddress
 import logging
@@ -38,11 +38,13 @@ def split_ipstring(ips):
 def is_valid_multicast_range(ip, N, port):
     """
     Validates a multicast ranges of format 225.0.0.4, 7, 1234.
+
         - The base ip has to be a valid multicast address.
         - The address range has to be a valid power of two.
         - The address has to be a multiple of the blocksize. A block of 8 can
           start at a.b.c.0, a.b.c.8, a.b.c.16, ...
           This is a limitation we inherited from the casperfpga skarab firmware(s).
+
     The function will return True if the string specifies a valid range and false otherwise. IF the string cannot be interpreted an error is raised.
     """
     if (N & (N - 1)) != 0:

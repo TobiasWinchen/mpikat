@@ -1,3 +1,7 @@
+"""
+Get information on numa architecture.
+"""
+
 from __future__ import print_function, division, unicode_literals
 
 import os
@@ -13,7 +17,7 @@ __numaInfo = None
 
 def expandlistrange(lr):
     """
-    Expands '1,2,3-5' to list [1,2,3,4,5]
+    Expands a string containing a list of numbers '1,2,3-5' to an actual list [1,2,3,4,5]
     """
     output = set()
     if not lr.isspace():
@@ -32,7 +36,7 @@ def expandlistrange(lr):
 
 def updateInfo():
     """
-    @brief Updates the info dictionary.
+    Updates the info dictionary.
     """
     logging.debug("Update numa dictionary")
     global __numaInfo
@@ -120,7 +124,7 @@ def updateInfo():
 
 def getInfo():
     """
-    @brief Returns dict with info on numa configuration. For every numa node the dict
+    Returns dict with info on numa configuration. For every numa node the dict
     contains a dict with the associated ressources.
     """
     global __numaInfo
@@ -131,7 +135,7 @@ def getInfo():
 
 def getFastestNic(numa_node=None):
     """
-    @brief Returns (name, description) of the fastest nic (on given numa_node)
+    Returns (name, description) of the fastest nic (on given numa_node)
     """
     if numa_node is not None:
         nics = getInfo()[numa_node]["net_devices"]

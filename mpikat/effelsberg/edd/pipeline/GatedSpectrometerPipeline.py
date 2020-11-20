@@ -1,25 +1,25 @@
+#Copyright (c) 2019 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in all
+#copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#SOFTWARE.
+
 from __future__ import print_function, division, unicode_literals
-"""
-Copyright (c) 2019 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.sensor_watchdog import SensorWatchdog
@@ -44,7 +44,6 @@ import tempfile
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
 
 # DADA BUFFERS TO BE USED
-DADABUFFERS = ["dada", "dadc"]
 
 
 #class DadaBuffer:
@@ -83,7 +82,7 @@ DADABUFFERS = ["dada", "dadc"]
 
 
 
-DEFAULT_CONFIG = {
+_DEFAULT_CONFIG = {
         "id": "GatedSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "GatedSpectrometer",
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
@@ -155,11 +154,10 @@ DEFAULT_CONFIG = {
         "idx1_modulo": "auto",
     }
 
-NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
 
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
-mkrecv_header = """
+_mkrecv_header = """
 ## Dada header configuration
 HEADER          DADA
 HDR_VERSION     1.0
@@ -193,7 +191,7 @@ SCI_LIST            2
 
 # static configuration for mksend. all items that can be configured are passed
 # via cmdline
-mksend_header = """
+_mksend_header = """
 HEADER          DADA
 HDR_VERSION     1.0
 HDR_SIZE        4096
@@ -240,14 +238,13 @@ ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 
 
 class GatedSpectrometerPipeline(EDDPipeline):
-    """@brief gated spectrometer pipeline 
+    """Gated spectrometer pipeline
     """
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
     def __init__(self, ip, port):
-        """@brief initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
+        EDDPipeline.__init__(self, ip, port, _DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []
@@ -255,7 +252,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        Setup the monitoring sensors
         """
         EDDPipeline.setup_sensors(self)
 
@@ -276,7 +273,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def add_input_stream_sensor(self, streamid):
         """
-        @brief add sensors for i/o buffers for an input stream with given streamid.
+        Add sensors for i/o buffers for an input stream with given streamid.
         """
         self._polarization_sensors[streamid] = {}
         self._polarization_sensors[streamid]["mkrecv_sensors"] = MkrecvSensors(streamid)
@@ -308,8 +305,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
-         @brief Create a ring buffer of given size with given key on specified numa node.
-                Adds and register an appropriate sensor to thw list
+         Create a ring buffer of given size with given key on specified numa node.
+         Adds and register an appropriate sensor to thw list
          """
          # always clear buffer first. Allow fail here
          yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
@@ -325,7 +322,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def _buffer_status_handle(self, status):
         """
-        @brief Process a change in the buffer status
+        Process a change in the buffer status.
         """
         for streamid, stream_description in self._config["input_data_streams"].items():
             if status['key'] == stream_description['dada_key']:
@@ -341,17 +338,15 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        @brief   Configure the EDD gated spectrometer
+        Configure the EDD gated spectrometer
 
-        @param   config_json    A JSON dictionary object containing configuration information
+        Args:
+            config_json    A JSON dictionary object containing configuration information
 
-        @detail  The configuration dictionary is highly flexible - settings relevant for non experts are:
-                 @code
-                     {
-                            "fft_length": 1024 * 1024 * 2 * 8,
-                            "naccumulate": 32,
-                     }
-                 @endcode
+
+        The size of the dada buffers are calculated from the configuration
+        settings and the memory is allocated. The gated spectromter subprocess
+        is started on th GPU.
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -387,7 +382,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         for i, streamid in enumerate(self._config['input_data_streams']):
             # calculate input buffer parameters
             stream_description = self._config['input_data_streams'][streamid]
-            stream_description["dada_key"] = DADABUFFERS[i]
+            stream_description["dada_key"] = ["dada", "dadc"][i]
             self.add_input_stream_sensor(streamid)
             self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] / 8
 
@@ -455,7 +450,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
             if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
-                mksend_header_file.write(mksend_header)
+                mksend_header_file.write(_mksend_header)
                 mksend_header_file.close()
 
                 nhops = len(ip_range)
@@ -496,7 +491,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_start(self, config_json=""):
         """
-        @brief start streaming spectrometer output
+        Start streaming spectrometer output.
+
+        Starts mkrecv process.
         """
         log.info("Starting EDD backend")
         try:
@@ -504,7 +501,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 stream_description = self._config['input_data_streams'][streamid]
                 mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
                 log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-                mkrecvheader_file.write(mkrecv_header)
+                mkrecvheader_file.write(_mkrecv_header)
                 # DADA may need this
                 # ToDo: Check for input stream definitions
                 mkrecvheader_file.write("NBIT {}\n".format(stream_description["bit_depth"]))
@@ -563,7 +560,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_stop(self):
         """
-        @brief Stop streaming of data
+        Stop streaming of data.
+
+        Stop all subprocesses. Also triggers a deconfigure.
         """
         log.info("Stoping EDD backend")
         for wd in self.__watchdogs:
@@ -587,7 +586,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def deconfigure(self):
         """
-        @brief deconfigure the gated spectrometer pipeline.
+        Deconfigure the gated spectrometer pipeline.
+
+        Clears all dada buffers.
         """
         log.info("Deconfiguring EDD backend")
         if self.previous_state == 'streaming':
