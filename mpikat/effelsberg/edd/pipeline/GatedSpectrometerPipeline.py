@@ -82,7 +82,7 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipelin
 
 
 
-__DEFAULT_CONFIG = {
+_DEFAULT_CONFIG = {
         "id": "GatedSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "GatedSpectrometer",
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
@@ -157,7 +157,7 @@ __DEFAULT_CONFIG = {
 
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
-__mkrecv_header = """
+_mkrecv_header = """
 ## Dada header configuration
 HEADER          DADA
 HDR_VERSION     1.0
@@ -191,7 +191,7 @@ SCI_LIST            2
 
 # static configuration for mksend. all items that can be configured are passed
 # via cmdline
-__mksend_header = """
+_mksend_header = """
 HEADER          DADA
 HDR_VERSION     1.0
 HDR_SIZE        4096
@@ -244,7 +244,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
     def __init__(self, ip, port):
-        EDDPipeline.__init__(self, ip, port, __DEFAULT_CONFIG)
+        EDDPipeline.__init__(self, ip, port, _DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []
@@ -322,7 +322,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def _buffer_status_handle(self, status):
         """
-        Process a change in the buffer status
+        Process a change in the buffer status.
         """
         for streamid, stream_description in self._config["input_data_streams"].items():
             if status['key'] == stream_description['dada_key']:
@@ -342,6 +342,11 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         Args:
             config_json    A JSON dictionary object containing configuration information
+
+
+        The size of the dada buffers are calculated from the configuration
+        settings and the memory is allocated. The gated spectromter subprocess
+        is started on th GPU.
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -445,7 +450,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
             if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
-                mksend_header_file.write(__mksend_header)
+                mksend_header_file.write(_mksend_header)
                 mksend_header_file.close()
 
                 nhops = len(ip_range)
@@ -486,7 +491,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_start(self, config_json=""):
         """
-        Start streaming spectrometer output
+        Start streaming spectrometer output.
+
+        Starts mkrecv process.
         """
         log.info("Starting EDD backend")
         try:
@@ -494,7 +501,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 stream_description = self._config['input_data_streams'][streamid]
                 mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
                 log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-                mkrecvheader_file.write(__mkrecv_header)
+                mkrecvheader_file.write(_mkrecv_header)
                 # DADA may need this
                 # ToDo: Check for input stream definitions
                 mkrecvheader_file.write("NBIT {}\n".format(stream_description["bit_depth"]))
@@ -553,7 +560,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_stop(self):
         """
-        Stop streaming of data
+        Stop streaming of data.
+
+        Stop all subprocesses. Also triggers a deconfigure.
         """
         log.info("Stoping EDD backend")
         for wd in self.__watchdogs:
@@ -578,6 +587,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
     def deconfigure(self):
         """
         Deconfigure the gated spectrometer pipeline.
+
+        Clears all dada buffers.
         """
         log.info("Deconfiguring EDD backend")
         if self.previous_state == 'streaming':

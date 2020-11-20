@@ -83,7 +83,7 @@ def updateConfig(oldo, new):
 
 
 def value_list(d):
-    
+
     if isinstance(d, dict):
         return d.values()
     else:
@@ -148,8 +148,6 @@ class EDDPipeline(AsyncDeviceServer):
     Pipelines can also implement:
         * populate_data_store to send data to the store. The address and port for a data store is received along the request.
     """
-    DEVICE_STATUSES = ["ok", "degraded", "fail"]
-
 
     PIPELINE_STATES = ["idle", "configuring", "configured",
             "capture_starting", "streaming", "ready",
@@ -250,7 +248,8 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Setup monitoring sensors.
 
-        The EDDPipeline base provides default sensors. Should be called by a subclass.
+        The EDDPipeline base provides default sensors. Should be called by
+        every subclass to ensure default sensors are available.
 
         """
         self._pipeline_sensor_status = Sensor.discrete(
@@ -342,7 +341,6 @@ class EDDPipeline(AsyncDeviceServer):
         self.previous_state = self._state
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
-        self.notify()
 
 
     def start(self):
@@ -359,27 +357,11 @@ class EDDPipeline(AsyncDeviceServer):
         AsyncDeviceServer.stop(self)
 
 
-    def _decode_capture_stdout(self, stdout, callback):
-        """
-        @ToDo: Potentially obsolete ??
-        """
-        log.debug('{}'.format(str(stdout)))
-
-
-    def _handle_execution_stderr(self, stderr, callback):
-        """
-        @ToDo: Potentially obsolete ??
-        """
-        log.info(stderr)
-        log.debug('{}'.format(str(stderr)))
-
-
     def _subprocess_error(self, proc):
         """
         Sets the error state because proc has ended.
         """
-        pass
-        log.error("Errror handle called because subprocess {} ended with return code {}".format(proc.pid, proc.returncode))
+        log.error("Error handle called because subprocess {} ended with return code {}".format(proc.pid, proc.returncode))
         self._subprocessMonitor.stop()
         self.state =  "error"
 
@@ -525,8 +507,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Start the EDD backend processing
 
-        Note:
-            This is the KATCP wrapper for the capture_start command
+        This is the KATCP wrapper for the capture_start command
 
         Returns:
             katcp reply object [[[ !capture_start ok | (fail [error description]) ]]]
@@ -583,8 +564,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Stop the EDD backend processing
 
-        Note:
-            This is the KATCP wrapper for the capture_stop command
+        This is the KATCP wrapper for the capture_stop command
 
         Return:
             katcp reply object [[[ !capture_stop ok | (fail [error description]) ]]]
@@ -651,8 +631,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Start emasurement.
 
-        Note:
-            This is the KATCP wrapper for the measurement_start command
+        This is the KATCP wrapper for the measurement_start command
 
         Return:
             katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
@@ -686,8 +665,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Stop  measurement
 
-        Note:
-            This is the KATCP wrapper for the measurement_stop command
+        This is the KATCP wrapper for the measurement_stop command
 
         Return:
             katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
@@ -720,8 +698,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Deconfigure the pipeline.
 
-        Note:
-            This is the KATCP wrapper for the deconfigure command
+        This is the KATCP wrapper for the deconfigure command
 
         Return:
             katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]

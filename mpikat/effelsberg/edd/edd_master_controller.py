@@ -52,10 +52,23 @@ log = logging.getLogger("mpikat.effelsberg.edd.EddMasterController")
 
 class EddMasterController(EDDPipeline):
     """
-    The main KATCP interface for the EDD backend
+    The main KATCP interface to the EDD backend.
+
+    The EddMasterController provides a single interface to all pipeline
+    components in the EDD. State changes are transmitted in parallel to the
+    individual pipeline components. On configuration, their dependencies are
+    taken into account.
+
+    Configuration
+    -------------
+    The configuration dict contains the configurations of the individual
+    product pipelines, using their id as key.
+
+    In addition, the connection to the data store can be configured here with
+    the entry
+            "data_store" = {"ip": "aaa.bbb.ccc.ddd", port:6347}
+
     """
-    VERSION_INFO = ("mpikat-edd-api", 0, 2)
-    BUILD_INFO = ("mpikat-edd-implementation", 0, 2, "rc1")
 
     def __init__(self, ip, port, redis_ip, redis_port, edd_ansible_git_repository_folder, inventory):
         """
@@ -69,7 +82,7 @@ class EddMasterController(EDDPipeline):
                         Directory of a (checked out) edd_ansible git repository
                         to be used for provisioning inventory to use for ansible
         """
-        EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port), "skip_packetizer_config":False})
+        EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port)})
 
         self.__controller = {}
         self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
@@ -81,9 +94,10 @@ class EddMasterController(EDDPipeline):
         self.__provisioned = None
         self.__controller = {}
 
+
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        Setup katcp monitoring sensors.
         """
         EDDPipeline.setup_sensors(self)
 
@@ -136,12 +150,10 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        @brief   Configure the EDD backend
+        Configure the EDD backend
 
-        @param   config_json    A JSON dictionary object containing configuration information
-
-        @param   The following global configuration option can be set in the configuration:
-            "data_store" = {"ip": "aaa.bbb.ccc.ddd", port:6347}
+        Args:
+            config_json:    A JSON dictionary object containing configuration information
 
         """
         log.info("Configuring EDD backend for processing")
@@ -207,7 +219,7 @@ class EddMasterController(EDDPipeline):
         configure_futures = []
 
         @coroutine
-        def process_node(node):
+        def __process_node(node):
             """
             Wrapper to parallelize configuration of nodes. Any Node will wait for its predecessors to be done.
             """
@@ -253,7 +265,7 @@ class EddMasterController(EDDPipeline):
                 configure_results[node] = True
 
         log.debug("Creating processing futures")
-        configure_futures = [process_node(node) for node in dag.nodes()]
+        configure_futures = [__process_node(node) for node in dag.nodes()]
         yield configure_futures
         self._configUpdated()
         log.debug("Final configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
@@ -274,7 +286,7 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def deconfigure(self):
         """
-        @brief      Deconfigure the EDD backend.
+        Implementation of the deconfiguration request.
         """
         log.info("Deconfiguring all products:")
         log.debug("Sending deconfigure to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
@@ -288,16 +300,7 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def capture_start(self):
         """
-        @brief      Start the EDD backend processing
-
-        @detail     Not all processing components will respond to a capture_start request.
-                    For example the packetisers and roach2 boards will in general constantly
-                    stream once configured. Processing components (such as the FITS interfaces)
-                    which must be cognisant of scan boundaries should respond to this request.
-
-        @note       This method may be updated in future to pass a 'scan configuration' containing
-                    source and position information necessary for the population of output file
-                    headers.
+        Implementation of the capture-start.
         """
         log.debug("Sending capture_start to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
@@ -309,12 +312,7 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def capture_stop(self):
         """
-        @brief      Stop the EDD backend processing
-
-        @detail     Not all processing components will respond to a capture_stop request.
-                    For example the packetisers and roach2 boards will in general constantly
-                    stream once configured. Processing components (such as the FITS interfaces)
-                    which must be cognisant of scan boundaries should respond to this request.
+        Stop the EDD backend processing
         """
         log.debug("Sending capture_stop to {} products: {}".format(len(self.__controller.keys()), "\n - ".join(self.__controller.keys()) ))
         futures = []
@@ -325,7 +323,8 @@ class EddMasterController(EDDPipeline):
 
     @coroutine
     def measurement_prepare(self, config_json=""):
-        """"""
+        """
+        """
         log.debug("Received measurement prepare ... ")
         try:
             cfg = json.loads(config_json)
@@ -362,20 +361,13 @@ class EddMasterController(EDDPipeline):
         yield futures
 
 
-    def reset(self):
-        """
-        Resets the EDD, i.e. flusing all data bases. Note that runing containers are not stopped.
-        """
-        self.__eddDataStore._dataStreams.flushdb()
-        self.__provisioned = None
-
-
     @request(Str())
     @return_reply()
     def request_provision(self, req, name):
         """
-        @brief   Loads a provision configuration and dispatch it to ansible and sets the data streams for all products
-
+        Loads a provision configuration and dispatch it to ansible, sets and
+        connects the data streams for all products and load their initial
+        configuration.
         """
         log.info("Provision request received")
         @coroutine
@@ -397,8 +389,8 @@ class EddMasterController(EDDPipeline):
     @return_reply()
     def request_list_provisions(self, req):
         """
-        @brief List all availbale provision descriptions
-
+        List all provision descriptions available in the
+        edd_ansible_git_repository_folder.
         """
         @coroutine
         def wrapper():
@@ -443,11 +435,13 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def provision(self, description):
         """
-        @brief provision the edd with provided provision description.
+        Provision the EDD using the provided provision description.
 
-        @params description fo the provision. This has to be a string of format
-                NAME                 to load NAME.json and NAME.yml
-                NAME1.yml;NAME2.json to load different yml / json configs
+        Args:
+            description: description of the provision. This has to be a string of format
+
+                - ::`NAME`                 to load NAME.json and NAME.yml, or
+                - ::`NAME1.yml;NAME2.json` to load different yml / json configs
         """
         os.chdir(self.__edd_ansible_git_repository_folder)
         log.debug("Provision description {} from directory {}".format(description, os.getcwd()))
@@ -493,7 +487,7 @@ class EddMasterController(EDDPipeline):
         except Exception as E:
             raise FailReply("Error in provisioning thrown by ansible {}".format(E))
 
-        yield self.loadBasicConfig(basic_config_file)
+        yield self._loadBasicConfig(basic_config_file)
 
 
 
@@ -501,8 +495,13 @@ class EddMasterController(EDDPipeline):
     @return_reply()
     def request_load_basic_config(self, req, name):
         """
-        @brief   Loads a provision configuration and dispatch it to ansible and sets the data streams for all products
+        Loads a provision configuration and dispatch it to ansible and sets the
+        data streams for all products
 
+        Note:
+            The provision request already loads the basic configuration so that
+            this request does NOT need to be send - it is intended as an
+            development tool only.
         """
         log.info("load-basic-config request received")
         @coroutine
@@ -511,7 +510,7 @@ class EddMasterController(EDDPipeline):
                 descr_subfolder = os.path.join(self.__edd_ansible_git_repository_folder, "provison_descriptions")
                 basic_config_file = os.path.join(descr_subfolder, name)
 
-                yield self.loadBasicConfig(basic_config_file)
+                yield self._loadBasicConfig(basic_config_file)
             except FailReply as fr:
                 log.error(str(fr))
                 req.reply("fail", str(fr))
@@ -525,7 +524,11 @@ class EddMasterController(EDDPipeline):
 
 
     @coroutine
-    def loadBasicConfig(self, basic_config_file):
+    def _loadBasicConfig(self, basic_config_file):
+        """
+        Actually loads the basic configuration, called by provision and load
+        basic configuarion requests.
+        """
         try:
             with open(basic_config_file) as cfg:
                 basic_config = json.load(cfg)
@@ -560,7 +563,7 @@ class EddMasterController(EDDPipeline):
 
     def __sanitizeConfig(self, config):
         """
-        Ensures config products are a dict with product['id'] as key
+        Ensures config products are a dict with product['id'] as key.
         """
         log.debug("Sanitze config")
         if not 'products' in config:
@@ -574,7 +577,13 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def _installController(self, config = {}):
         """
-        Updates controllers for all products known to redis and ensure a controller exists for all components in a configuration.
+        Ensures that a controller for all products known to redis exists. In
+        case a config is provided it is also ensured that controller exists for
+        all products in the config.
+
+        Note:
+            If a config contains a product unknonw to the data store, the
+            configuration must provide **ip** and **port** of the product.
         """
         log.debug("Installing controller for {} registered products.".format(len(self.__eddDataStore.products)))
         for product in self.__eddDataStore.products:
@@ -631,7 +640,8 @@ class EddMasterController(EDDPipeline):
     @return_reply()
     def request_deprovision(self, req):
         """
-        @brief   Deprovision EDD - stop all ansible containers launched in recent provision cycle.
+        Deprovision EDD - stop all ansible containers launched in recent
+        provision cycle and removes all controllers  from the data base.
         """
         log.info("Deprovision request received")
         @coroutine
@@ -682,7 +692,7 @@ class EddMasterController(EDDPipeline):
     @return_reply()
     def request_provision_update(self, req, repository=""):
         """
-        @brief   Clones or pulls updates for the git repository
+        Clones or pulls updates for the git repository
 
         """
         @coroutine
@@ -704,7 +714,7 @@ class EddMasterController(EDDPipeline):
     @coroutine
     def provision_update(self, repository=""):
         """
-        @brief   Clones or pulls updates for the git repository
+        Clones or pulls updates for the git repository
         """
 
         if not os.path.isdir(self.__edd_ansible_git_repository_folder):

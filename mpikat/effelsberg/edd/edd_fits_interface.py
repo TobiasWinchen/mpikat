@@ -54,13 +54,17 @@ class FitsWriterConnectionManager(Thread):
     This class implements a TCP/IP server that can accept connections from
     the FITS writer. Upon acceptance, the new communication socket is stored
     and packages from a local queue are streamed to the fits writer.
-    """
-    def __init__(self, ip, port):
-        """
-        @brief    Construct a new instance
 
-        @param    ip    The IP address to serve on
-        @param    port  The port to serve on
+    Packages are delayed by (at default) 3s, as the pacakges might be out of
+    time-order, and the fits writer expects to receive the packages in strict
+    order.
+    """
+    def __init__(self, ip, port, delay=3):
+        """
+        Args:
+            ip:    The IP address to accept connectons from.
+            port:  The port to serve on
+            delay: Number of seconds a package is kept in the queue before submission.
         """
         Thread.__init__(self)
         self._address = (ip, port)
@@ -69,7 +73,7 @@ class FitsWriterConnectionManager(Thread):
         self._is_measuring = Event()
 
         self.__output_queue = queue.PriorityQueue()
-        self.__delay = 3         # keep a packet for self.__delay seconds in the queue, as there might be other packages arriving.
+        self.__delay = delay
         self.__latestPackageTime = 0
         self.send_items = 0
         self.dropped_items = 0
@@ -110,7 +114,9 @@ class FitsWriterConnectionManager(Thread):
 
     def drop_connection(self):
         """
-        @brief   Drop any current FITS writer connection and waits for new one.
+        Drop any current FITS writer connection. The
+        FitsWriterConnectionManager will be ready for new connections
+        afterwards,
         """
         self._has_connection.clear()
         if not self._transmit_socket is None:
@@ -129,7 +135,8 @@ class FitsWriterConnectionManager(Thread):
 
     def put(self, pkg):
         """
-        Put new output pkg on local queue if there is a fits server connection. Drop packages otherwise.
+        Put a new output pkg on the local queue if there is a fits server
+        connection. Drop packages otherwise.
         """
         if self._is_measuring.is_set():
             self.__output_queue.put([pkg.timestamp, pkg, time.time()])
@@ -140,7 +147,7 @@ class FitsWriterConnectionManager(Thread):
 
     def send_data(self):
         """
-        Send all packages in queue older than delay seconds.
+        Send all packages in the queue older than delay seconds.
         """
         now = time.time()
         log.debug('Send data, Queue size: {}'.format(self.__output_queue.qsize()))
@@ -185,11 +192,17 @@ class FitsWriterConnectionManager(Thread):
 
     def stop(self):
         """
-        @brief   Stop the server
+        Stop the server
         """
         self._shutdown.set()
 
+
     def run(self):
+        """
+        main loop of the server. The server will wait for a FITS writer
+        conenction and send any data as long as the connection exists. If
+        connection drops, it wwill wait for a new connection.
+        """
         while not self._shutdown.is_set():
             if not self._has_connection.is_set():
                 self.drop_connection()  # Just in case
@@ -218,20 +231,25 @@ class FitsWriterConnectionManager(Thread):
 
 class FitsInterfaceServer(EDDPipeline):
     """
-    Class providing an interface between EDD processes and the
-    Effelsberg FITS writer
+    Interface of EDD pipeliens to the Effelsberg FITS writer.
+
+    Configuration
+    -------------
+
+    fits_writer_ip: "0.0.0.0"   - IP to accept Fitw Writer Connections from.
+    fits_writer_port: 5002      - Port to listen for fits writer connections.
+    drop_nans: True             - If true, any spectra containing a  NaM or Inf value will be dropped.
+
+
     """
     VERSION_INFO = ("spead-edd-fi-server-api", 1, 0)
     BUILD_INFO = ("spead-edd-fi-server-implementation", 0, 1, "")
 
     def __init__(self, ip, port):
         """
-        @brief Initialization of the FitsInterfaceServer object
-
-        @param  katcp_interface    Interface address to serve on
-        @param  katcp_port         Port number to serve on
-        @param  fw_ip              IP address of the FITS writer
-        @param  fw_port            Port number to connect to FITS writer
+        Args:
+            ip:   IP accepting katcp control connections from.
+            port: Port number to serve on
         """
         EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[],
             id="fits_interface", type="fits_interface", drop_nans=True,
@@ -250,7 +268,7 @@ class FitsInterfaceServer(EDDPipeline):
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        Setup monitoring sensors
         """
         EDDPipeline.setup_sensors(self)
 
@@ -326,8 +344,6 @@ class FitsInterfaceServer(EDDPipeline):
     @coroutine
     def configure(self, config_json):
         """
-        Options:
-            drop_nans   (bool)      Drop spectra containing a nan to not confuse the fits writer.
         """
         log.info("Configuring Fits interface")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -378,7 +394,9 @@ class FitsInterfaceServer(EDDPipeline):
     @coroutine
     def periodic_sensor_update(self):
         """
-        Updates the sensors periodically.
+        Updates the katcp sensors.
+
+        This is a peiodic update as the connection are managed using threads and not coroutines.
         """
         timestamp = time.time()
         if not self._fw_connection_manager:
@@ -438,6 +456,14 @@ class FitsInterfaceServer(EDDPipeline):
         self.__plotting = True
 
         def plot_script(conn, pk1, pk2, ndisplay_channels=1024):
+            """
+            PLot script creating a band pass plot. To be executed using the multiprocessing module.
+
+            Args:
+                conn:     multiprocessing conenction object to which the output plot is written.
+                pk1, pk2: Fits writer packages to be plotted.
+                ndisplay_channels: Number of channels to be plotted.
+            """
             import matplotlib as mpl
             mpl.use('Agg')
             import numpy as np
@@ -572,17 +598,16 @@ class FitsInterfaceServer(EDDPipeline):
 
 class SpeadCapture(Thread):
     """
-    @brief     Captures heaps from one or more streams that are transmitted in
-               SPEAD format and call handler on completed heaps.
+    Captures heaps from one or more streams that are transmitted in SPEAD
+    format and call handler on completed heaps.
     """
     def __init__(self, mc_ip, mc_port, capture_ip, speadhandler, numa_affinity = []):
         """
-        @brief Constructor
-
-        @param  mc_ip              Array of multicast group IPs
-        @param  mc_port            Port number of multicast streams
-        @param  capture_ip         Interface to capture streams from MCG  on
-        @param  handler            Object that handles data in the stream
+        Args:
+            mc_ip:              Array of multicast group IPs
+            mc_port:            Port number of multicast streams
+            capture_ip:         Interface to capture streams from MCG  on
+            handler:            Object that handles data in the stream
         """
         Thread.__init__(self, name=self.__class__.__name__)
         self._mc_ip = mc_ip
@@ -610,7 +635,7 @@ class SpeadCapture(Thread):
 
     def stop(self):
         """
-        @brief      Stop the capture thread
+        Stop the capture thread
         """
         self._handler.stop = True
         self.stream.stop()
@@ -802,7 +827,7 @@ class GatedSpectrometerSpeadHandler(object):
 
         class PrepPack:
             """
-            Package in preparation
+            Package in preparation.
             """
             def __init__(self, number_of_spectra, nchannels):
                 self._nspectra = number_of_spectra
@@ -916,36 +941,6 @@ class GatedSpectrometerSpeadHandler(object):
                     tooold_packages.append(p)
             for p in tooold_packages:
                 self.__packages_in_preparation.pop(p)
-
-    def statusOutput(self, fw_pkt, timestamp):
-        """
-        Create status output from fitswriter package
-        """
-        if not hasattr(self, self.__newPlot):
-            self.__newPlot = True
-            self.__plotData = [None, None]
-
-        if not self.__newPlot:
-            # not creating a new plot, but maybe next turn?
-            if timestamp - self.__lastplot > self.__plotrate:
-                if self.__plotData[0] or self.__plotData[0]:
-                    log.warning("Previous plot not finished. Dropping plot!")
-                else:
-                    self.__newPlot = True
-            return
-            nsections = fw_pkt.nsections
-            nchannels = fw_pkt.sections[0].nchannels
-            self.plot_data[fw_pkt.blank_phases - 1] = np.ctypeslib.as_array(fw_pkt.sections, shape=(nsections, nchannels)).copy()
-
-        if self._blankSyncCounter[0] == self._blankSyncCounter[0]:
-            # this will not work if there are more than plot_freq spectra in
-            # one phase only in a series. But in general there should be a tic
-            if self.__plotting:
-                return
-            self.__plotting = True
-            K = subprocess
-
-
 
 
 if __name__ == "__main__":

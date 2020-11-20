@@ -40,8 +40,8 @@ import tempfile
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedFullStokesSpectrometerPipeline")
 
-__DEFAULT_CONFIG = {
-        "id": "GatedFullStokesSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
+_DEFAULT_CONFIG = {
+        "id": "GatedFullStokesSpectrometer",                           # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "GatedFullStokesSpectrometer",
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
         "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the
@@ -139,7 +139,7 @@ __DEFAULT_CONFIG = {
 
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
-__mkrecv_header = """
+_mkrecv_header = """
 ## Dada header configuration
 HEADER          DADA
 HDR_VERSION     1.0
@@ -176,7 +176,7 @@ SCI_LIST            2
 
 # static configuration for mksend. all items that can be configured are passed
 # via cmdline
-__mksend_header = """
+_mksend_header = """
 HEADER          DADA
 HDR_VERSION     1.0
 HDR_SIZE        4096
@@ -225,14 +225,12 @@ ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 
 
 class GatedFullStokesSpectrometerPipeline(EDDPipeline):
-    """Gated spectrometer pipeline
+    """Full Stokes Spectrometer 
     """
-    VERSION_INFO = ("mpikat-edd-api", 0, 1)
-    BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
     def __init__(self, ip, port):
         """initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port, __DEFAULT_CONFIG)
+        EDDPipeline.__init__(self, ip, port, _DEFAULT_CONFIG)
         self.mkrec_cmd = []
         self._dada_buffers = []
         self.__dada_key = "dada"  # key of inpt buffer, output is inverse
@@ -438,7 +436,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
         if self._config["output_type"] == 'network':
             mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
-            mksend_header_file.write(__mksend_header)
+            mksend_header_file.write(_mksend_header)
             mksend_header_file.close()
 
             nhops = len(ip_range)
@@ -478,7 +476,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
     @coroutine
     def capture_start(self, config_json=""):
         """
-        @brief start streaming spectrometer output
+        start streaming of spectrometer output.
         """
         log.info("Starting EDD backend")
         try:
@@ -486,7 +484,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
             mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
             log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-            mkrecvheader_file.write(__mkrecv_header)
+            mkrecvheader_file.write(_mkrecv_header)
             # DADA may need this
             # ToDo: Check for input stream definitions
             mkrecvheader_file.write("NBIT {}\n".format(self.stream_description["bit_depth"]))
