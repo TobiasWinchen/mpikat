@@ -489,13 +489,12 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Retrieved data from telescope:\n   Source name: {}\n   RA = {},  decl = {}".format(self._source_name, ra, decl))
 
         if self._config["mode"] == "Timing":
-            epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
+            epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name.split("_")[0][1:]))
             log.debug("Checking epta file {}".format(epta_file))
             self.pulsar_flag = is_accessible(epta_file)
-            if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
-                if (parse_tag(self._source_name) != "FB"):
-                    log.warning("source {} is neither pulsar nor calibrator. Will not react until next measurement prepare".format(self._source_name))
-                    raise StateChange("streaming")
+            if (parse_tag(self._source_name) != "R") and (not self.pulsar_flag):
+                log.warning("source {} is neither pulsar nor calibrator. Will not react until next measurement prepare".format(self._source_name))
+                raise StateChange("streaming")
 
         self._timer = Time.now()
         log.debug("Setting blank image")
@@ -595,9 +594,7 @@ class EddPulsarPipeline(EDDPipeline):
         os.chdir("/tmp/")
         log.debug("Creating the predictor with tempo2")
         if self._config["mode"] == "Timing":
-            self.pulsar_flag_with_R = is_accessible(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:-2])))
-            log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
-            if (parse_tag(self._source_name) == "default") & is_accessible(epta_file):
+            if (parse_tag(self._source_name) != "R") & is_accessible(epta_file):
                 cmd = 'numactl -m {} taskset -c {} tempo2 -f {} -pred'.format(
                     self.numa_number, self.__coreManager.get_coresstr('single'),
                     epta_file).split()
@@ -661,7 +658,7 @@ class EddPulsarPipeline(EDDPipeline):
         self.par_dict = {}
         self.dm = 0
         try:
-            with open(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))) as fh:
+            with open(os.path.join(self.epta_dir, '{}.par'.format(self._source_name.split("_")[0][1:]))) as fh:
                 for line in fh:
                     #par file can have 2-4 columns, this is a stupid way to do it
                     if len(line.strip().split()) == 2:
@@ -684,7 +681,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._par_dict_sensor.set_value(json.dumps(self.par_dict))
 
 
-    @state_change(target="measuring", allowed=["set", "ready", "streaming", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
+    @state_change(target="measuring", allowed=["set", "ready", "measurement_preparing"], waitfor="set", intermediate="measurement_starting")
     @coroutine
     def measurement_start(self):
         ####################################################
@@ -695,14 +692,14 @@ class EddPulsarPipeline(EDDPipeline):
             log.debug("source_name = {}".format(
                 self._source_name))
             if self._config["mode"] == "Timing":
-                epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
-                if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
+                epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name.split("_")[0][1:]))
+                if (parse_tag(self._source_name) != "R") and self.pulsar_flag:
                     cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                             numa=self.numa_number,
                             args=self._config["dspsr_params"]["args"],
                             nchan="-F {}:D".format(self._config["nchannels"]),
                             nbin="-b {}".format(self._config["nbins"]),
-                            name=self._source_name,
+                            name=self._source_name.split("_")[0],
                             predictor="/tmp/t2pred.dat",
                             parfile=epta_file,
                             cpus=self.__coreManager.get_coresstr('dspsr'),
@@ -714,7 +711,7 @@ class EddPulsarPipeline(EDDPipeline):
                             numa=self.numa_number,
                             args=self._config["dspsr_params"]["args"],
                             nchan="-F {}:D".format(self._config["nchannels"]),
-                            name=self._source_name,
+                            name=self._source_name.split("_")[0],
                             cpus=self.__coreManager.get_coresstr('dspsr'),
                             cuda_number=self.cuda_number,
                             keyfile=self.dada_key_file.name)
