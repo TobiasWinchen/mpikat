@@ -17,6 +17,21 @@
 #LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #SOFTWARE.
+"""
+The Master Controller provides a single interface to all pipeline components in the EDD. State
+changes are transmitted in parallel to the individual pipeline components. On
+configuration, their dependencies are taken into account.
+
+Configuration Settings
+----------------------
+
+The configuration dict contains the configurations of the individual product
+pipelines, using their id as key.
+
+In addition, the connection to the data store can be configured here with
+the entry ``"data_store" = {"ip": "aaa.bbb.ccc.ddd", port:6347}``
+
+"""
 
 from __future__ import print_function, unicode_literals, division
 
@@ -53,21 +68,6 @@ log = logging.getLogger("mpikat.effelsberg.edd.EddMasterController")
 class EddMasterController(EDDPipeline):
     """
     The main KATCP interface to the EDD backend.
-
-    The EddMasterController provides a single interface to all pipeline
-    components in the EDD. State changes are transmitted in parallel to the
-    individual pipeline components. On configuration, their dependencies are
-    taken into account.
-
-    Configuration
-    -------------
-    The configuration dict contains the configurations of the individual
-    product pipelines, using their id as key.
-
-    In addition, the connection to the data store can be configured here with
-    the entry
-            "data_store" = {"ip": "aaa.bbb.ccc.ddd", port:6347}
-
     """
 
     def __init__(self, ip, port, redis_ip, redis_port, edd_ansible_git_repository_folder, inventory):
@@ -384,6 +384,7 @@ class EddMasterController(EDDPipeline):
                 req.reply("ok")
         self.ioloop.add_callback(wrapper)
         raise AsyncReply
+
 
     @request()
     @return_reply()
