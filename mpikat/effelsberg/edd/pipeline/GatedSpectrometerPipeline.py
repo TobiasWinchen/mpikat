@@ -17,6 +17,82 @@
 #LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #SOFTWARE.
+"""
+The GatedSpectrometer receives data in MPIFR EDD packetizer Format from both
+polarizations and calculates the resulting spectra per polarization. Computing
+requires one numa node per input polarization.
+
+Data is received using `mkrecv`_, stored in a `dada`_ buffer and processed using
+the `gated spectrometer command line application`.
+
+
+Configuration Settings
+----------------------
+    input_data_streams
+        The spectrometer requires two input data streams ``polarization_0,
+        polarization_1`` in MPIFR_EDD_Packetizer format.
+
+    fft_length (int)
+        Number of samples to be included in a FFT. As the dc channel is
+        dropped, the output contains fft_length/2 channels.
+
+    naccumulate (int)
+        Number of output spectra to be accumulated into one output spectrum.
+
+Note:
+    The integration time is given by fft_length * naccumulate / sampling_rate
+    of the packetizer.
+
+
+Output Data Streams
+-------------------
+    Two data streams in GatedSpectrometer format per input polarisation
+    corresponding to spectra for noise diode on and off.
+
+
+Expert/Debugging Settings
+-------------------------
+    samples_per_block (int)
+        Configure the size of the internal ring buffer. (Default 256*1024*1024)
+        This limits the maximum size of the FFT to 128 M Channels by default.
+        With this option the code can be tweaked to run on low-mem GPUs or if
+        the GPU is  shared with other codes.
+
+    output_rate_factor (float)
+        The nominal output data rate is multiplied by this factor and the
+        result used to send the data fast enough to keep up with the data
+        stream while avoiding bursts. Default: 1.10
+
+    output_type ('network', 'disk', 'null')
+        Instead of sending the output to the network, it can be dropped ('null') or written to 'disk'.
+
+    output_directory (str)
+        Output directory used for output_type 'disk'. Defaults to '/mnt'
+
+    dummy_input (bool)
+        Don't connect to packetizer data streams but use randomly generated
+        input data.
+
+    nonfatal_numacheck
+        The code check the available numa nodes and selects only nodes for
+        execution with GPU and network card. If no suitable numa node exists,
+        configuration will fail unless this this option is set to True. If set
+        to True, only a warning is emitted. Used e.g. in automatic testing.
+
+
+.. _mkrecv:
+    https://gitlab.mpifr-bonn.mpg.de/mhein/mkrecv
+
+.. _dada:
+    http://psrdada.sourceforge.net/
+
+.. _GatedSpectrometer CLI application:
+    
+
+"""
+
+
+
 
 from __future__ import print_function, division, unicode_literals
 

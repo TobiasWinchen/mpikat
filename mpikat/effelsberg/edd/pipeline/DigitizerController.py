@@ -1,24 +1,93 @@
+#Copyright (c) 2020 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in all
+#copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#SOFTWARE.
 """
-Copyright (c) 2020 Tobias Winchen <twinchen@mpifr-bonn.mpg.de>
+The DigitizerController pipeline controls MPIfR digitizer/packetizer via KATCP.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Consecutive configure commands are send to the packetizer only if the
+parameters have changed. This behavior can be controlled using the
+**force_reconfigure** and **max_sync_age** options.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Note:
+    The digitizer state is not queried, but only previous configs received by
+    the pipeline are remembered. Thus, the first  configuration is always send,
+    and interacting with the packetizer by other tools in parallel will result
+    in possibly wrong configuration options.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+
+Configuration Settings
+----------------------
+
+ bit_depth (int)
+    Number of bits of information in each sample. Possible values are 8 and 12.
+
+ sampling_rate
+    Sampling rate of the packetizer in Hz. Note that the effective sampling
+    rate also depends on the **predecimation_factor**.
+
+ predecimation_factor (int)
+    Only 1 out of **predecimation_factor** samples is used by the ADC. A
+    sampling_rate setting of 2600000000 and a **predecimation_factor** of 2
+    corresponds to an effective sampling_rate of 1.3 GHz. Possible values are:
+    1,2,4,8.
+
+ noise_diode_frequency (float)
+    Frequency of the noise diode. The noise diode is 50% on and 50% off with a
+    cycle duration of 2x **noise_diode_frequency**.  A negative value indicates
+    always off. A value of 0 indicates always on.
+
+ flip_spectrum (bool)
+    Flips the spectrum, e.g. to correct for Nyquist zone.
+
+
+Output Data Streams
+-------------------
+    polarization_0, polarization_1
+        One output data stream per polarization in MPIFR_EDD_Packetizer format.
+        polarization_0 maps to capture_destination "v" of the packetizer,
+        polarization_1 maps to capture_destination "h" of the packetizer.
+
+
+Expert/Debugging Settings
+-------------------------
+ sync_time (int)
+    Provide time stamp (Unix time) at which the packetizer will be synced. The
+    timestamp has to be in the future.  If the value is 0 (default), the
+    current time is used.
+
+ force_reconfigure (bool)
+    Force a reconfiguration even if parameters are the same.
+
+ max_sync_age (int)
+    Maximum time since the last synchronisation [s] before a packetizer is
+    reconfigured even if no settings have changed.  Default: 82800 s
+
+ skip_packetizer_config (bool)
+    If true, ALWAYS skips the packetizer configuration - Overrides force and
+    max sync age. Useful for pipeline development.
+
+ dummy_configure (bool)
+    Update output streams with dummy configuration. Useful for provision
+    development.
+
 """
+
 from __future__ import print_function, division, unicode_literals
 
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change, getArgumentParser, setup_logger
@@ -37,7 +106,7 @@ import os
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline DigitizerController")
 
-DEFAULT_CONFIG = {
+_DEFAULT_CONFIG = {
         "id": "DigitizerController",
         "type": "DigitizerController",
 
@@ -45,14 +114,12 @@ DEFAULT_CONFIG = {
         "sampling_rate" : 2600000000,
         "predecimation_factor" : 1,
         "flip_spectrum": False,
-        'sync_time': 0,           # Use specified sync time, current time otherwise
-        'noise_diode_frequency': -1, # Negative for off, 0 for always on
-        'force_reconfigure': False,  # If true, we will force a reconfigure on every execution of the packetizer
-        'skip_packetizer_config': False, # Skips the packetizer config ALWAYS. Overrides force and max sync age.
-        'dummy_configure': False, # Sens a complete dummy configure for provisioning debugging
-
-        'max_sync_age': 82800,      # max age of sync time [s] before a packetizer is reconfigured (on configure command)
-
+        'sync_time': 0,
+        'noise_diode_frequency': -1,
+        'force_reconfigure': False,
+        'skip_packetizer_config': False,
+        'dummy_configure': False,
+        'max_sync_age': 82800,
         "output_data_streams":
         {
             "polarization_0" :                          # polarization_0 maps to v in packetizer nomenclatura
@@ -81,7 +148,7 @@ class DigitizerControllerPipeline(EDDPipeline):
         """@brief initialize the pipeline.
            @param device is the control ip of the board
         """
-        EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
+        EDDPipeline.__init__(self, ip, port, _DEFAULT_CONFIG)
         log.info('Connecting to packetizer @ {}:{}'.format(device_ip, device_port))
         self._client = DigitiserPacketiserClient(device_ip, device_port)
 

@@ -17,6 +17,73 @@
 #LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #SOFTWARE.
+"""
+The Gate Full-Stokes Spectrometer pipeline receives data in MPIFR EDD packetizer Format from both
+polarizations and calculates the resulting Stokes spectra IQUV.
+
+
+Configuration Settings
+----------------------
+    input_data_streams
+        The spectrometer requires two input data streams ``polarization_0,
+        polarization_1`` in MPIFR_EDD_Packetizer format.
+
+    fft_length (int)
+        Number of samples to be included in a FFT. As the dc channel is
+        dropped, the output contains fft_length/2 channels.
+
+    naccumulate (int)
+        Number of output spectra to be accumulated into one output spectrum.
+
+Note:
+    The integration time is given by fft_length * naccumulate / sampling_rate
+    of the packetizer.
+
+
+Output Data Streams
+-------------------
+    Eight data streams in GatedSpectrometer format corresponding to Stokes IQUV spectra for noise diode on and off. 
+
+
+Warning:
+    Although the output is labeled as IQUV throughout the pipeline and the data
+    processing code, this is only correct for a linear feed and the secondary
+    (primary?) focus.  For circular feed Q->V ,U->Q, V->U. Observing in the
+    (primary?) focus results in a factor -1 due to the effective polarization
+    flip from the single reflection.
+
+
+Expert/Debugging Settings
+-------------------------
+    samples_per_block (int)
+        Configure the size of the internal ring buffer. (Default 256*1024*1024)
+        This limits the maximum size of the FFT to 128 M Channels by default.
+        With this option the code can be tweaked to run on low-mem GPUs or if
+        the GPU is  shared with other codes.
+
+    output_rate_factor (float)
+        The nominal output data rate is multiplied by this factor and the
+        result used to send the data fast enough to keep up with the data
+        stream while avoiding bursts. Default: 1.10
+
+    output_type ('network', 'disk', 'null')
+        Instead of sending the output to the network, it can be dropped ('null') or written to 'disk'.
+
+    output_directory (str)
+        Output directory used for output_type 'disk'. Defaults to '/mnt'
+
+    dummy_input (bool)
+        Don't connect to packetizer data streams but use randomly generated
+        input data.
+
+    nonfatal_numacheck
+        The code check the available numa nodes and selects only nodes for
+        execution with GPU and network card. If no suitable numa node exists,
+        configuration will fail unless this this option is set to True. If set
+        to True, only a warning is emitted. Used e.g. in automatic testing.
+"""
+
+
 
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
@@ -43,11 +110,9 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedFullStokesSpectrome
 _DEFAULT_CONFIG = {
         "id": "GatedFullStokesSpectrometer",                           # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
         "type": "GatedFullStokesSpectrometer",
-        "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
-        "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the
-                                                            # theoretical  mazimum is thus  128 M Channels.   This option  allows
-                                                            # to tweak  the execution on  low-mem GPUs or  ig the GPU is  shared
-                                                            # with other  codes
+        "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supported input formats name:version
+        "samples_per_block": 256 * 1024 * 1024,             # 256 Mega samples per buffer block to allow high res  spectra - the
+                                                            # theoretical  maximum is thus  128 M Channels.   This option  allows
         "input_data_streams":
         {
             "polarization_0" :
@@ -129,7 +194,7 @@ _DEFAULT_CONFIG = {
         "output_directory": "/mnt",                         # ToDo: Should be a output data stream def.
         "output_type": 'network',                           # ['network', 'disk', 'null']  ToDo: Should be a output data stream def.
         "dummy_input": False,                               # Use dummy input instead of mkrecv process. Should be input data stream option.
-        "nonfatal_numacheck": False,                             # Ignore numa node constraints, e.g. due to missing networksi for debugging 
+        "nonfatal_numacheck": False,                             # Ignore numa node constraints, e.g. due to missing networks for debugging 
         "log_level": "debug",
 
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
