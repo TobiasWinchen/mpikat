@@ -27,7 +27,7 @@ author = 'The mpikat developers'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinxcontrib.apidoc',
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage',
         'sphinx.ext.napoleon', 'sphinx_rtd_theme',  'recommonmark', 'sphinx.ext.intersphinx']
 # 'sphinx.ext.viewcode',
 
@@ -68,6 +68,8 @@ autoapi_keep_files = True
 
 intersphinx_mapping = {
         'katcp': ('https://pythonhosted.org/katcp/', None),
+        'edd': ('http://mpifr-bdg.pages.mpcdf.de/edd_documentation/', None),
+        'psrdada_cpp': ('http://mpifr-bdg.pages.mpcdf.de/psrdada_cpp/', None),
         }
 
 

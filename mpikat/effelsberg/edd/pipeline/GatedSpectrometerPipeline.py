@@ -18,9 +18,12 @@
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #SOFTWARE.
 """
-The GatedSpectrometer receives data in MPIFR EDD packetizer Format from both polarizations and
-calculates the resulting spectra per polarization. Computing require one numa
-node per input polarization.
+The GatedSpectrometer receives data in MPIFR EDD packetizer Format from both
+polarizations and calculates the resulting spectra per polarization. Computing
+requires one numa node per input polarization.
+
+Data is received using `mkrecv`_, stored in a `dada`_ buffer and processed using
+the `gated spectrometer command line application`.
 
 
 Configuration Settings
@@ -75,6 +78,17 @@ Expert/Debugging Settings
         execution with GPU and network card. If no suitable numa node exists,
         configuration will fail unless this this option is set to True. If set
         to True, only a warning is emitted. Used e.g. in automatic testing.
+
+
+.. _mkrecv:
+    https://gitlab.mpifr-bonn.mpg.de/mhein/mkrecv
+
+.. _dada:
+    http://psrdada.sourceforge.net/
+
+.. _GatedSpectrometer CLI application:
+    
+
 """
 
 
