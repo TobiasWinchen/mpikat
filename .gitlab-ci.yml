@@ -120,3 +120,12 @@ pages:
     - dev
     - cicd
     - doc
+
+
+trigger_edd_deco_update:
+  stage: deplot
+  trigger: mpifr-bdg/edd_documentation
+  only:
+    - dev
+
+
