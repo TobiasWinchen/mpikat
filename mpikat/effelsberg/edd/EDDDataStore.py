@@ -25,7 +25,7 @@ class redisfail2warn(object):
 # Data Formats
 # Global specified static data formats stored locally to always
 # provide a lookup of the values in the code. The values are written to the
-# online db to prpovide he information, but updates will not be looked up.
+# online db to provide he information, but updates will not be looked up.
 
 data_formats = {
         "GatedSpectrometer:1": {
