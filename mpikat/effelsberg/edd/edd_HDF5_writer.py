@@ -53,7 +53,7 @@ class EDDHDFFileWriter(object):
     A HDF File Wrtier for EDD backend output.
     """
 
-    def __init__(self, filename=None, mode='a', chunksize = 128):
+    def __init__(self, filename=None, mode='a', chunksize = 'auto'):
         """
         Args;
             filename:
@@ -68,6 +68,9 @@ class EDDHDFFileWriter(object):
                 Number of data blocks that are hold in memory and written to
                 file at once. This also defines the chunksize of the actual hdf
                 file.
+                Auto uses hdf5 auto chunk size selection.
+                Preliminary test showed ~ 25% performance in write spead with
+                manual chunk size set to 8 spectra compared to auto.
 
         ToDo:
             Performance: Tune chunk cache size
@@ -126,7 +129,10 @@ class EDDHDFFileWriter(object):
             self.__subscan.create_group(section)
 #            columns = gated_spectrometer_format
             for k, c in data.items():
-                self.__subscan[section].create_dataset(k, dtype=c.dtype, shape=(0,) + c.shape, maxshape=(None,)+ c.shape, chunks=(self.__chunksize, )+ c.shape)
+                if self.__chunksize == 'auto':
+                    self.__subscan[section].create_dataset(k, dtype=c.dtype, shape=(0,) + c.shape, maxshape=(None,)+ c.shape, chunks=True)
+                else:
+                    self.__subscan[section].create_dataset(k, dtype=c.dtype, shape=(0,) + c.shape, maxshape=(None,)+ c.shape, chunks=(self.__chunksize, )+ c.shape, )
 
 
         for did, dataset in self.__subscan[section].items():
