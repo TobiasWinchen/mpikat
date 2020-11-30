@@ -178,4 +178,8 @@ class EDDHDFFileWriter(object):
         self.__file.close()
 
 
-
+    def flush(self):
+        """
+        Flush the HDF Buffers.
+        """
+        self.__file.flush()

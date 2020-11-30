@@ -269,6 +269,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     @coroutine
     def measurement_stop(self):
         _log.info("Stopping FITS interface data transfer")
+        self.__output_file.flush()
         # ToDo: There probably should be an output queue so that time ordering
         # is not becoming an issue
 
