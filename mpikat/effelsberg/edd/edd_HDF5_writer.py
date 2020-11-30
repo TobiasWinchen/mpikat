@@ -9,7 +9,7 @@ import logging
 
 _log = logging.getLogger("mpikat.effelsberg.edd.EDDHDFFileWriter")
 
-
+import string
 
 
 def gated_spectrometer_format(nchannels):
@@ -23,6 +23,10 @@ def gated_spectrometer_format(nchannels):
     dformat['saturated_samples'] = {'dtype':np.int64, 'shape': (1,)}
 
     return dformat
+
+
+
+
 
 
 ## Items from the spead heap edd_fits_interface  --> to be refactrored
@@ -53,13 +57,18 @@ class EDDHDFFileWriter(object):
     A HDF File Wrtier for EDD backend output.
     """
 
-    def __init__(self, filename=None, mode='a', chunksize = 'auto'):
+    def __init__(self, filename=None, path = None, file_id_no=None, mode='a', chunksize = 'auto'):
         """
         Args;
             filename:
                 If specified this filename will be used. Otherwise a unique
                 filename will be generated automatically based on the current
                 time.
+            path:
+                path to use to create the file. Current working directory if None of filename is specified.
+            file_id_no:
+                If specified this will be used in the automatic file name.
+                Otherwise this will be a random string.
             mode:
                 w        Create file, truncate if exists
                 w- or x  Create file, fail if exists
@@ -76,14 +85,32 @@ class EDDHDFFileWriter(object):
             Performance: Tune chunk cache size
             Performance: Check memoro offsets + alignment? Likely auto tuned and already good
         """
-        if not filename:
+
+        # Use full path for file
+
+        if filename:
+            path = os.path.dirname(filename)
+
+        if not path:
+            path = os.getcwd()
+            _log.debug('No path provided. Using default path: {}'.format(path))
+
+        if filename:
+            ofile = os.path.join(path, filename)
+        else:
             while True:
-                now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-                filename = "EDD_{}.{:03d}UTC.hdf5".format(now, np.random.randint(0, 1000))
-                if not os.path.exists(filename):
+                now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")
+                if not file_id_no:
+                    suffix = "".join([string.ascii_letters[i] for i in np.random.randint(0, len(string.ascii_letters), size=5)])
+                else:
+                    suffix = str(file_id_no)
+                filename = "EDD_{}UTC_{}.hdf5".format(now, suffix)
+                ofile = os.path.join(path, filename)
+                if not os.path.exists(ofile):
                     break
-        _log.debug('Creating file: {}'.format(filename))
-        self.__filename = filename
+
+        _log.debug('Using file: {}'.format(ofile))
+        self.__filename = ofile
         self.__chunksize = chunksize
 
         self.__file = h5py.File(self.__filename, mode)
