@@ -215,7 +215,7 @@ class EddMasterController(EDDPipeline):
         log.info("Dependency graph of products:\n{}".format(graph))
         self._configuration_graph.set_value(graph)
 
-        configure_results= {}
+        configure_results = {}
         configure_futures = []
 
         @coroutine

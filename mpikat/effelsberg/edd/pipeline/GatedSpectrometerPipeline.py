@@ -171,7 +171,7 @@ _DEFAULT_CONFIG = {
             "polarization_0" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
-                "ip": "225.0.0.152+3",
+                "ip": "225.0.0.140+3",
                 "port": "7148",
                 "bit_depth" : 8,
                 "sample_rate": 1300000000,
@@ -179,7 +179,7 @@ _DEFAULT_CONFIG = {
              "polarization_1" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",
-                "ip": "225.0.0.156+3",
+                "ip": "225.0.0.144+3",
                 "port": "7148",
                 "bit_depth" : 8,
                 "sample_rate": 1300000000,
@@ -251,9 +251,7 @@ SAMPLE_CLOCK_START  0 # This is updated with the sync-time of the packetiser to 
 DADA_NSLOTS         3
 SLOTS_SKIP          4  # Skip the first four slots
 
-NTHREADS            32
-NHEAPS              64
-NGROUPS_TEMP        65536
+NTHREADS            8
 
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES            1      # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
@@ -438,9 +436,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
             if len(numa.getInfo()[node]['gpus']) < 1:
                 log.debug("Not enough gpus on numa node {} - removing from pool.".format(node))
                 continue
-            #elif len(numa.getInfo()[node]['net_devices']) < 1:
-            #    log.debug("Not enough nics on numa node {} - removing from pool.".format(node))
-            #    continue
+            elif len(numa.getInfo()[node]['net_devices']) < 1:
+                log.debug("Not enough nics on numa node {} - removing from pool.".format(node))
+                continue
             else:
                 self.__numa_node_pool.append(node)
 
@@ -460,22 +458,22 @@ class GatedSpectrometerPipeline(EDDPipeline):
             stream_description = self._config['input_data_streams'][streamid]
             stream_description["dada_key"] = ["dada", "dadc"][i]
             self.add_input_stream_sensor(streamid)
-            self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] / 8
+            self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] // 8
 
-            nHeaps = self._config["samples_per_block"] / stream_description["samples_per_heap"]
-            input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
+            nHeaps = self._config["samples_per_block"] // stream_description["samples_per_heap"]
+            input_bufferSize = nHeaps * (self.input_heapSize + 64 // 8)
             log.info('Input dada parameters created from configuration:\n\
                     heap size:        {} byte\n\
                     heaps per block:  {}\n\
                     buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
 
             # calculate output buffer parameters
-            nSlices = max(self._config["samples_per_block"] / self._config['fft_length'] /  self._config['naccumulate'], 1)
-            nChannels = self._config['fft_length'] / 2 + 1
+            nSlices = max(self._config["samples_per_block"] // self._config['fft_length'] //  self._config['naccumulate'], 1)
+            nChannels = self._config['fft_length'] // 2 + 1
             # on / off spectrum  + one side channel item per spectrum
-            output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8)
+            output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] // 8 + 2 * 8)
 
-            output_heapSize = nChannels * self._config['output_bit_depth'] / 8
+            output_heapSize = nChannels * self._config['output_bit_depth'] // 8
             integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (float(stream_description["sample_rate"]))
             self._integration_time_status.set_value(integrationTime)
             rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
@@ -597,7 +595,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
                     if self._config['idx1_modulo'] == 'auto': # Align along output ranges
-                        idx1modulo = self._config['fft_length'] * self._config['naccumulate'] / stream_description['samples_per_heap']
+                        idx1modulo = self._config['fft_length'] * self._config['naccumulate'] // stream_description['samples_per_heap']
                     else:
                         idx1modulo = self._config['idx1_modulo']
 

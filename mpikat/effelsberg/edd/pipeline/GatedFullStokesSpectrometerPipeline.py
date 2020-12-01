@@ -428,20 +428,20 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
 
         self.input_heapSize =  self.stream_description["samples_per_heap"] * self.stream_description['bit_depth'] // 8
 
-        nHeaps = self._config["samples_per_block"] / self.stream_description["samples_per_heap"]
-        input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
+        nHeaps = self._config["samples_per_block"] // self.stream_description["samples_per_heap"]
+        input_bufferSize = nHeaps * (self.input_heapSize + 64 // 8)
         log.info('Input dada parameters created from configuration:\n\
                 heap size:        {} byte\n\
                 heaps per block:  {}\n\
                 buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
 
         # calculate output buffer parameters
-        nSlices = max(self._config["samples_per_block"] / 2  / self._config['fft_length'] /  self._config['naccumulate'], 1)
-        nChannels = self._config['fft_length'] / 2 + 1
+        nSlices = max(self._config["samples_per_block"] // 2  // self._config['fft_length'] //  self._config['naccumulate'], 1)
+        nChannels = self._config['fft_length'] // 2 + 1
         # on / off spectrum  + one side channel item per spectrum
-        output_bufferSize = nSlices * (8 * (nChannels * self._config['output_bit_depth'] / 8 + 8))
+        output_bufferSize = nSlices * (8 * (nChannels * self._config['output_bit_depth'] // 8 + 8))
 
-        output_heapSize = nChannels * self._config['output_bit_depth'] / 8
+        output_heapSize = nChannels * self._config['output_bit_depth'] // 8
         integrationTime = self._config['fft_length'] * self._config['naccumulate']  / (float(self.stream_description["sample_rate"]))
         self._integration_time_status.set_value(integrationTime)
         rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
@@ -570,7 +570,7 @@ class GatedFullStokesSpectrometerPipeline(EDDPipeline):
                 log.info("Receiving data on NIC {} [ {} ] @ {} Mbit/s".format(fastest_nic, nic_params['ip'], nic_params['speed']))
 
                 if self._config['idx1_modulo'] == 'auto': # Align along output ranges
-                    idx1modulo = self._config['fft_length'] * self._config['naccumulate'] / self.stream_description['samples_per_heap']
+                    idx1modulo = self._config['fft_length'] * self._config['naccumulate'] // self.stream_description['samples_per_heap']
                 else:
                     idx1modulo = self._config['idx1_modulo']
 

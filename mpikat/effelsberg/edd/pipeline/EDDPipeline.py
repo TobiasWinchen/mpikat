@@ -343,6 +343,26 @@ class EDDPipeline(AsyncDeviceServer):
         self._pipeline_sensor_status.set_value(self._state)
 
 
+    @request(Str())
+    @return_reply()
+    def request_override_state(self, req, value):
+        """
+        Sets the state of the pipeline manually to a given value.
+
+        Return:
+            katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+        if value not in self.PIPELINE_STATES:
+            log.warning("Trying to overriding pipeline state but state '{}' does not exist".format(value))
+            req.reply("fail", "State '{}' does not exist.".format(value))
+        else:
+            log.warning("Overriding pipelien state: {}".format(value))
+            self.state = value 
+            req.reply("ok")
+        raise AsyncReply
+
+
+
     def start(self):
         """
         Start the server
@@ -395,6 +415,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Default method for configuration.
         """
+        log.info("Running configure.")
         pass
 
 
