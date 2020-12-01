@@ -128,6 +128,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         self.__output_file = None
         self.__measuring = False
 
+        self._capture_threads = []
 
     def setup_sensors(self):
         """
