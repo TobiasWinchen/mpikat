@@ -53,6 +53,12 @@ class EDDHDF5WriterPipeline(EDDPipeline):
 
     Configuration
     -------------
+        default_hdf5_group_prefix
+
+    Input Data Steams
+    -----------------
+
+
 
     """
     def __init__(self, ip, port):
@@ -62,56 +68,57 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             port: Port number to serve on
         """
         EDDPipeline.__init__(self, ip, port, dict(output_directory="/mnt",
-            input_data_streams={
-            "Stokes_I_0" :
+            input_data_streams =[
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.172",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_I_1" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.173",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_Q_0" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.174",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_Q_1" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.175",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_U_0" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.176",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_U_1" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.177",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_V_0" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.178",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             },
-            "Stokes_V_1" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.1.179",
                 "port": "7152",
+                "hdf5_group_prefix": "S"
             }
-            },
+            ],
+            default_hdf5_group_prefix="S",
             id="hdf5_writer", type="hdf5_writer"))
         self.mc_interface = []
 
@@ -152,12 +159,14 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     @state_change(target="idle", allowed=["streaming", "deconfiguring"], intermediate="capture_stopping")
     @coroutine
     def capture_stop(self):
-        if self._capture_thread:
-            _log.debug("Cleaning up capture thread")
-            self._capture_thread.stop()
-            self._capture_thread.join()
-            self._capture_thread = None
-            _log.debug("Capture thread cleaned")
+
+            _log.debug("Cleaning up capture threads")
+            for t in self._capture_threads:
+                t.stop()
+            for t in self._capture_threads:
+                t.join(10.0)
+            self._capture_threads = []
+            _log.debug("Capture threads cleaned")
 
 
     @state_change(target="idle", intermediate="deconfiguring", error='panic')
@@ -169,8 +178,6 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
-        """
-        """
         _log.info("Configuring HDF5 Writer")
         _log.debug("Configuration string: '{}'".format(config_json))
 
@@ -180,15 +187,16 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         _log.info("Final configuration:\n" + cfs)
 
         #ToDo: allow streams with multiple multicast groups and multiple ports
-        self.mc_interface = []
-        self.mc_port = None
+        self.mc_subscriptions = {}
         for stream_description in value_list(self._config['input_data_streams']):
-            self.mc_interface.append(stream_description['ip'])
-            if self.mc_port is None:
-                self.mc_port = stream_description['port']
-            else:
-                if self.mc_port != stream_description['port']:
-                    raise RuntimeError("All input streams have to use the same port!!!")
+            hdf5_group = self._config["default_hdf5_group_prefix"]
+            if "hdf5_group_prefix" in stream_description:
+                hdf5_group = stream_description["hdf5_group_prefix"]
+            if hdf5_group not in self.mc_subscriptions:
+                self.mc_subscriptions[hdf5_group] = dict(groups=[], port=stream_description['port'])
+            self.mc_subscriptions[hdf5_group]['groups'].append(stream_description['ip'])
+            if self.mc_subscriptions[hdf5_group]['port'] != stream_description['port']:
+                raise RuntimeError("All input streams of one group have to use the same port!!!")
 
 
 
@@ -213,12 +221,15 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         _log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
         affinity = numa.getInfo()[nic_description['node']]['cores']
 
-        spead_handler = GatedSpectrometerSpeadHandler()
-        self._capture_thread = SpeadCapture(self.mc_interface,
-                                           self.mc_port,
-                                           self._capture_interface,
-                                           spead_handler, self._package_writer, affinity)
-        self._capture_thread.start()
+
+        self._capture_threads = []
+        for hdf5_group_prefix, mcg in self.mc_subscriptions.items():
+            spead_handler = GatedSpectrometerSpeadHandler(hdf5_group_prefix)
+            ct = SpeadCapture(mcg["groups"], mcg["port"],
+                                               self._capture_interface,
+                                               spead_handler, self._package_writer, affinity)
+            ct.start()
+            self._capture_threads.append(ct)
 
 
     @coroutine
@@ -229,9 +240,14 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         This is a peiodic update as the connection are managed using threads and not coroutines.
         """
         timestamp = time.time()
-        if self._capture_thread:
-            conditional_update(self._incomplete_heaps, self._capture_thread._incomplete_heaps, timestamp=timestamp)
-            conditional_update(self._complete_heaps, self._capture_thread._complete_heaps, timestamp=timestamp)
+        incomplete_heaps = 0
+        complete_heaps = 0
+        for t in self._capture_threads:
+            incomplete_heaps += t._incomplete_heaps
+            complete_heaps += t._complete_heaps
+
+        conditional_update(self._incomplete_heaps, incomplete_heaps, timestamp=timestamp)
+        conditional_update(self._complete_heaps, complete_heaps, timestamp=timestamp)
 
 
 
@@ -281,9 +297,11 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         Handle server stop. Stop all threads
         """
         try:
-            if self._capture_thread:
-                self._capture_thread.stop()
-                self._capture_thread.join(3.0)
+            for t in self._capture_threads:
+                t.stop()
+            for t in self._capture_interface:
+                t.join(3.0)
+
         except Exception as E:
             _log.error("Exception during stop! {}".format(E))
         super(EDDHDF5WriterPipeline, self).stop()
@@ -396,10 +414,11 @@ class GatedSpectrometerSpeadHandler(object):
     Parse heaps of gated spectrometer output from spead stream and create data dict.
 
     """
-    def __init__(self):
+    def __init__(self, group_prefix=""):
 
        # self.plottingQueue = queue.PriorityQueue()
         #self.__delay = delay
+        self.__group_prefix = group_prefix
 
         #Description of heap items
         # ToDo: move to gated spectrometer or whereever the stream format is
@@ -441,7 +460,7 @@ class GatedSpectrometerSpeadHandler(object):
         _log.debug("No missing keys.")
         pol = convert48_64(items["polarization"].value)
         nds = convert48_64(items["noise_diode_status"].value)
-        section_id = "S{}_ND_{}".format(pol, nds)
+        section_id = self.__group_prefix + "{}_ND_{}".format(pol, nds)
         _log.debug("Set section_id: {}".format(section_id))
 
         sampling_rate = float(convert48_64(items["sampling_rate"].value))

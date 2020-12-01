@@ -415,6 +415,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         Default method for configuration.
         """
+        log.info("Running configure.")
         pass
 
 
