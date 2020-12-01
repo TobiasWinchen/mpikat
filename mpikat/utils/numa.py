@@ -9,9 +9,16 @@ import socket
 import fcntl
 import struct
 
-import mpikat.utils.pynvml as pynvml
-
 import logging
+
+try:
+    import mpikat.utils.pynvml as pynvml
+    pynvml.nvmlInit()
+    __haspynvml = True
+except Exception as E:
+    logging.warning("pynvml not available. Cannot use GPUs (if any)")
+    __haspynvml = False
+
 __numaInfo = None
 
 
@@ -106,20 +113,20 @@ def updateInfo():
             __numaInfo[node]["net_devices"][device]['speed'] = int(speed)
 
     # check cuda devices:
-    pynvml.nvmlInit()
+    if __haspynvml:
 
-    nGpus = pynvml.nvmlDeviceGetCount()
+        nGpus = pynvml.nvmlDeviceGetCount()
 
-    for i in range(nGpus):
-        handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-        pciInfo = pynvml.nvmlDeviceGetPciInfo(handle)
+        for i in range(nGpus):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+            pciInfo = pynvml.nvmlDeviceGetPciInfo(handle)
 
-        d = '/sys/bus/pci/devices/' + pciInfo.busId.decode('ascii') + "/numa_node"
-        node = open(d).read().strip()
-        if node not in __numaInfo:
-            logging.debug("Device on node {}, but node not in list of nodes. Possible node was deacitvated.".format(node))
-            continue
-        __numaInfo[node]['gpus'].append(str(i))
+            d = '/sys/bus/pci/devices/' + pciInfo.busId.decode('ascii') + "/numa_node"
+            node = open(d).read().strip()
+            if node not in __numaInfo:
+                logging.debug("Device on node {}, but node not in list of nodes. Possible node was deacitvated.".format(node))
+                continue
+            __numaInfo[node]['gpus'].append(str(i))
 
 
 def getInfo():
