@@ -116,7 +116,35 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                 "ip": "225.0.1.179",
                 "port": "7152",
                 "hdf5_group_prefix": "S"
+            },
+
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.1.182",
+                "port": "7152",
+                "hdf5_group_prefix": "P"
+            },
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.1.183",
+                "port": "7152",
+                "hdf5_group_prefix": "P"
+            },
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.1.184",
+                "port": "7152",
+                "hdf5_group_prefix": "P"
+            },
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.1.185",
+                "port": "7152",
+                "hdf5_group_prefix": "P"
             }
+
+
+
             ],
             default_hdf5_group_prefix="S",
             id="hdf5_writer", type="hdf5_writer"))
@@ -201,10 +229,10 @@ class EDDHDF5WriterPipeline(EDDPipeline):
 
 
 
-    def _package_writer(self, (section, data)):
+    def _package_writer(self, data):
         if self._state == "measuring":
-            _log.info('Writing data to section: {}'.format(section))
-            self.__output_file.addData(section, data)
+            _log.info('Writing data to section: {}'.format(data[0]))
+            self.__output_file.addData(section, data[1])
         else:
             _log.debug("Not measuring, Dropping package")
 
