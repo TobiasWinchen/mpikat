@@ -87,7 +87,7 @@ Expert/Debugging Settings
     http://psrdada.sourceforge.net/
 
 .. _GatedSpectrometer CLI application:
-    
+
 
 """
 
@@ -167,24 +167,24 @@ _DEFAULT_CONFIG = {
                                                             # to tweak  the execution on  low-mem GPUs or  ig the GPU is  shared
                                                             # with other  codes
         "input_data_streams":
-        {
-            "polarization_0" :
+        [
             {
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
                 "ip": "225.0.0.140+3",
                 "port": "7148",
                 "bit_depth" : 8,
                 "sample_rate": 1300000000,
+                "polarization":0
             },
-             "polarization_1" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.144+3",
                 "port": "7148",
                 "bit_depth" : 8,
                 "sample_rate": 1300000000,
+                "polarization": 1
             }
-        },
+        ],
         "output_data_streams":
         {
             "polarization_0_0" :
@@ -398,11 +398,14 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         Process a change in the buffer status.
         """
-        for streamid, stream_description in self._config["input_data_streams"].items():
+        for i, stream_description in enumerate(self._config["input_data_streams"]):
+            streamid = "polarization_{}".format(stream_description['polarization'])
+
             if status['key'] == stream_description['dada_key']:
                 self._polarization_sensors[streamid]["input-buffer-total-write"].set_value(status['written'])
                 self._polarization_sensors[streamid]["input-buffer-fill-level"].set_value(status['fraction-full'])
-        for streamid, stream_description in self._config["input_data_streams"].items():
+        for i, stream_description in enumerate(self._config["input_data_streams"]):
+            streamid = "polarization_{}".format(stream_description['polarization'])
             if status['key'] == stream_description['dada_key'][::-1]:
                 self._polarization_sensors[streamid]["output-buffer-fill-level"].set_value(status['fraction-full'])
                 self._polarization_sensors[streamid]["output-buffer-total-read"].set_value(status['read'])
@@ -453,9 +456,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         self._subprocessMonitor = SubprocessMonitor()
         #ToDo: Check that all input data streams have the same format, or allow different formats
-        for i, streamid in enumerate(self._config['input_data_streams']):
+        for i, stream_description in enumerate(self._config['input_data_streams']):
+            streamid = "polarization_{}".format(stream_description['polarization'])
             # calculate input buffer parameters
-            stream_description = self._config['input_data_streams'][streamid]
             stream_description["dada_key"] = ["dada", "dadc"][i]
             self.add_input_stream_sensor(streamid)
             self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] // 8
@@ -515,11 +518,16 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
             ip_range = []
             port = set()
+            log.debug(" Checking matching outputdata streams")
             for key in self._config["output_data_streams"]:
+                log.debug("   . {} - {}".format(streamid, key))
                 if streamid in key:
+                    log.debug("    match")
                     ip_range.append(self._config["output_data_streams"][key]['ip'])
                     port.add(self._config["output_data_streams"][key]['port'])
+                    log.debug("Output stream {} streaming on port {}".format(key, self._config["output_data_streams"][key]['port']))
             if len(port)!=1:
+                log.error("Output streaming to ports: {}".format(port))
                 raise FailReply("Output data for one plarization has to be on the same port! ")
 
             if self._config["output_type"] == 'network':
@@ -537,7 +545,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
                 log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                 cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=heap_id_start , timestep=timestep,
-                        ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
+                        ofname=ofname, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nic_params['ip'],
                         mcast_dest=" ".join(ip_range),
                         port_tx=port.pop(), **cfg)
@@ -571,8 +579,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         log.info("Starting EDD backend")
         try:
-            for i, streamid in enumerate(self._config['input_data_streams']):
-                stream_description = self._config['input_data_streams'][streamid]
+            for i, stream_description in enumerate(self._config["input_data_streams"]):
+                streamid = "polarization_{}".format(stream_description['polarization'])
                 mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
                 log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
                 mkrecvheader_file.write(_mkrecv_header)
@@ -619,7 +627,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
             raise E
         else:
             self.__watchdogs = []
-            for i, k in enumerate(self._config['input_data_streams']):
+            for i, stream_description in enumerate(self._config["input_data_streams"]):
+                streamid = "polarization_{}".format(stream_description['polarization'])
                 wd = SensorWatchdog(self._polarization_sensors[streamid]["input-buffer-total-write"],
                         10 * self._integration_time_status.value(),
                         self.watchdog_error)
