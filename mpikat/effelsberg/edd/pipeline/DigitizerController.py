@@ -123,16 +123,18 @@ _DEFAULT_CONFIG = {
         "output_data_streams":
         {
             "polarization_0" :                          # polarization_0 maps to v in packetizer nomenclatura
-            {
+            {                                           # Dual info on polarization, as stream nameing is arbitrary string, but pol field carries the nfromaton
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.140+3",
                 "port": "7148",
+                "polarization": 0
             },
              "polarization_1" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.144+3",
                 "port": "7148",
+                "polarization": 1
             }
         }
     }
