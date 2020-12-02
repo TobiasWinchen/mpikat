@@ -36,7 +36,7 @@ log = logging.getLogger("mpikat.edd_fits_interface")
 
 
 # Artificial time delta between noise diode on / off status
-__NOISEDIODETIMEDELTA = 0.001
+_NOISEDIODETIMEDELTA = 0.001
 
 
 def conditional_update(sensor, value, status=1, timestamp=None):
@@ -438,7 +438,7 @@ class FitsInterfaceServer(EDDPipeline):
             pks.append([ref_time, pkg])
             for t, pkg2 in pks:
                 dt = ref_time - t
-                if abs(abs(dt) - __NOISEDIODETIMEDELTA) < __NOISEDIODETIMEDELTA / 2:
+                if abs(abs(dt) - _NOISEDIODETIMEDELTA) < _NOISEDIODETIMEDELTA / 2:
                     log.debug(" Matching pair found after looking at {} packages, dt: {}".format(len(pks), dt))
                     found_pair = [pkg, pkg2, min(ref_time, t)]
                     break
@@ -903,7 +903,7 @@ class GatedSpectrometerSpeadHandler(object):
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
-            packet.reference_time += __NOISEDIODETIMEDELTA 
+            packet.reference_time += _NOISEDIODETIMEDELTA 
 
         # Update local time
         if packet.reference_time > self.__now:
