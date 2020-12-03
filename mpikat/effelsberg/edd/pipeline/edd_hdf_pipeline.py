@@ -232,7 +232,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     def _package_writer(self, data):
         if self._state == "measuring":
             _log.info('Writing data to section: {}'.format(data[0]))
-            self.__output_file.addData(section, data[1])
+            self.__output_file.addData(data[0], data[1])
         else:
             _log.debug("Not measuring, Dropping package")
 
