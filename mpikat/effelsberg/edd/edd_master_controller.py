@@ -170,6 +170,7 @@ class EddMasterController(EDDPipeline):
             raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
 
         if not self.__provisioned:
+            log.debug("Not provisioned. Using full config.")
             # Do not use set here, as there might not be a basic config from
             # provisioning
             cfg = self.__sanitizeConfig(cfg)

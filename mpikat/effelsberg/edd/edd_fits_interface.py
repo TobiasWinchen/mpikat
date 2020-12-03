@@ -922,7 +922,7 @@ class GatedSpectrometerSpeadHandler(object):
 
             # package is done. Send or drop
             if self.__drop_invalid_packages and not pp.valid:
-                log.warning("Package for reference time {} dropped because it is invalid!".format(packet.reference_time))
+                log.warning("Package for reference time {} dropped because it contains NaN)!".format(packet.reference_time))
                 self.invalidPackages += 1
             else:
                 self.__fits_interface.put(pp.fw_pkt)
