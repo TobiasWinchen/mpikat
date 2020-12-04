@@ -17,7 +17,7 @@ def gated_spectrometer_format(nchannels):
     Create a format dictionary for the spectrometer format. This has to go somewhere else.
     """
     dformat = {}
-    dformat['timetamp'] = {'dtype':float, 'shape': (1,)}
+    dformat['timestamp'] = {'dtype':float, 'shape': (1,)}
     dformat['spectrum'] = {'dtype':float, 'shape': (nchannels,)}
     dformat['integration_time'] = {'dtype':float, 'shape': (1,)}
     dformat['saturated_samples'] = {'dtype':np.int64, 'shape': (1,)}
