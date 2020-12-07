@@ -510,7 +510,7 @@ class GatedSpectrometerSpeadHandler(object):
         reference_time = float(sync_time) + float(timestamp_count) / sampling_rate + float(integration_period/ 2.)
         _log.debug("Set timestamp: {}".format(reference_time))
 
-        data['timetamp'] = np.array([reference_time])
+        data['timestamp'] = np.array([reference_time])
 
         data['integration_time'] = np.array([number_of_input_samples / sampling_rate])
         data['saturated_samples'] = np.array([-42])
