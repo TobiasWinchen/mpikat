@@ -229,16 +229,6 @@ class DigitiserPacketiserClient(object):
         """
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
-    @coroutine
-    def set_noise_diode_firing(self, fraction, cycle_length):
-        """
-        @brief      Sets the noise_diode firing fraction
-
-        @param      factor (e.g. 0, 0.5, 1)
-
-        """
-        yield self._safe_request("noise_source", "now", fraction, cycle_length)
-
 
     @coroutine
     def set_flipsignalspectrum(self, value):
@@ -433,8 +423,13 @@ if __name__ == "__main__":
         help='Do not send capture start command.')
     parser.add_argument('--sync-time', dest='sync_time', type=int,
         help='Use specified synctime, otherwise use current time')
+
+
+
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
         help='Set the noise diode frequency', default=-1)
+    parser.add_argument('--noise-diode-pattern', dest='noise_diode_pattern', type=float, nargs=2,
+        help='Set the noise diode pattern, percentage [0...1], perios [s]')
 
     parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
     args = parser.parse_args()
@@ -466,6 +461,8 @@ if __name__ == "__main__":
     actions.append((client.flip_spectrum, dict(flip=args.flip_spectrum)))
     if args.noise_diode_frequency >= 0.:
         actions.append((client.set_noise_diode_frequency, dict(frequency=args.noise_diode_frequency)))
+    if args.noise_diode_pattern:
+        actions.append((client.set_noise_diode_firing_pattern, dict(percentage=args.noise_diode_pattern[0], period=args.noise_diode_pattern[1])))
 
     # Sync + capture start should come last
     if args.synchronize:
