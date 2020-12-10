@@ -153,7 +153,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         self.__periodic_callback = PeriodicCallback(self.periodic_sensor_update, 1000)
         self.__periodic_callback.start()
 
-        self.__output_file = None
+        self._output_file = None
         self.__measuring = False
 
         self._capture_threads = []
@@ -232,7 +232,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     def _package_writer(self, data):
         if self._state == "measuring":
             _log.info('Writing data to section: {}'.format(data[0]))
-            self.__output_file.addData(data[0], data[1])
+            self._output_file.addData(data[0], data[1])
         else:
             _log.debug("Not measuring, Dropping package")
 
@@ -288,17 +288,20 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             _log.error("Cannot parse json:\n{}".format(config))
             raise RuntimeError("Cannot parse json.")
 
-
-
-        if ("new_file" in config and config["new_file"]) or (not self.__output_file):
+        if ("new_file" in config and config["new_file"]) or (not self._output_file):
             _log.debug("Creating new file")
-            self.__output_file = EDDHDFFileWriter(path=self._config["output_directory"])
+            if "file_id" in config:
+                file_id = config["file_id"]
+            else:
+                file_id = None
+            self._output_file = EDDHDFFileWriter(path=self._config["output_directory"], file_id_no = file_id)
+
 
         if ("override_newsubscan"  in config and config["override_newsubscan"]):
             _log.debug("Overriding new subscan creation")
         else:
             _log.debug("Creating new subscan")
-            self.__output_file.newSubscan()
+            self._output_file.newSubscan()
 
 
 
@@ -314,7 +317,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     @coroutine
     def measurement_stop(self):
         _log.info("Stopping FITS interface data transfer")
-        self.__output_file.flush()
+        self._output_file.flush()
         # ToDo: There probably should be an output queue so that time ordering
         # is not becoming an issue
 
