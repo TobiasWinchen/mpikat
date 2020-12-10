@@ -4,50 +4,61 @@ from katcp import FailReply
 import unittest
 import tornado.testing
 import tornado.gen
-
+import tempfile
+import shutil
 import logging
-
-class TestHDFPipeline(tornado.testing.AsyncTestCase):
-
-    def setUp(self):
-        super(TestHDFPipeline, self).setUp()
-        self.pipeline = EDDHDFFileWriter("localhost", 1234)
-
-
-    @tornado.gen.coroutine
-    def test_sequence(self):
-        self.assertEqual(self.pipeline.state, 'idle')
-        result = self.pipeline.configure('{"output_directory":"/tmp"}')
-        yield result
-        self.assertEqual(self.pipeline.state, 'configured')
-
-        yield self.pipeline.capture_start()
-        self.assertEqual(self.pipeline.state, 'streaming')
-
-        yield self.pipeline.measurement_prepare()
-        self.assertEqual(self.pipeline.state, 'ready')
-
-        # Ignore mesaurement start, stop prepare
-        yield self.pipeline.measurement_start()
-        self.assertEqual(self.pipeline.state, 'measuring')
-
-        yield self.pipeline.measurement_stop()
-        self.assertEqual(self.pipeline.state, 'ready')
-
-        # This test needs to be available,as otherwise on successfull test
-        # pycoverage wont exit
-        yield self.pipeline.deconfigure()
-        self.assertEqual(self.pipeline.state, 'idle')
-
-
-#    @tornado.testing.gen_test(timeout=120)
-#    def test_measurement_prepare_prefix(self):
-
-
-
-if __name__ == '__main__':
-    logging.basicConfig(filename='debug.log',
-        format=("[ %(levelname)s - %(asctime)s - %(name)s "
-             "- %(filename)s:%(lineno)s] %(message)s"),
-            level=logging.DEBUG)
-    unittest.main()
+#
+#class TestHDFPipeline(tornado.testing.AsyncTestCase):
+#
+#    #def setUp(self):
+#    #    super(TestHDFPipeline, self).setUp()
+#    #    print(self.datadir)
+#
+#
+#    @tornado.testing.gen_test
+#    def test_sequence(self):
+#        pipeline = EDDHDF5WriterPipeline("localhost", 1234)
+#        self.datadir = tempfile.mkdtemp()
+#
+#
+#        self.assertEqual(pipeline.state, 'idle')
+#
+#        #js =  '{"output_directory":"' + self.datadir + '"}'
+#        #print(js)
+#
+#        yield pipeline.configure()
+#        self.assertEqual(pipeline.state, 'configured')
+#
+#        yield pipeline.capture_start()
+#        self.assertEqual(pipeline.state, 'ready')
+#
+#        yield pipeline.measurement_prepare()
+#        self.assertEqual(pipeline.state, 'set')
+#
+#        # Ignore mesaurement start, stop prepare
+#        yield pipeline.measurement_start()
+#        self.assertEqual(pipeline.state, 'measuring')
+#
+#        yield pipeline.measurement_stop()
+#        self.assertEqual(pipeline.state, 'ready')
+#
+#        # This test needs to be available,as otherwise on successfull test
+#        # pycoverage wont exit
+#        yield pipeline.deconfigure()
+#        self.assertEqual(pipeline.state, 'idle')
+#
+#
+##    @tornado.testing.gen_test(timeout=120)
+##    def test_measurement_prepare_prefix(self):
+##        super(TestHDFPipeline, self).setUp()
+##        pass
+##        #shutil.rmtree(self.datadir)
+#
+#
+#
+#if __name__ == '__main__':
+#    logging.basicConfig(filename='debug.log',
+#        format=("[ %(levelname)s - %(asctime)s - %(name)s "
+#             "- %(filename)s:%(lineno)s] %(message)s"),
+#            level=logging.DEBUG)
+#    unittest.main()

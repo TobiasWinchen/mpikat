@@ -206,7 +206,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
 
     @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
-    def configure(self, config_json):
+    def configure(self, config_json = '{}'):
         _log.info("Configuring HDF5 Writer")
         _log.debug("Configuration string: '{}'".format(config_json))
 
