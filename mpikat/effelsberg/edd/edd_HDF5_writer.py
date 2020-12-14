@@ -117,6 +117,7 @@ class EDDHDFFileWriter(object):
 
         self.__subscan_id = 0
 
+        self.__items = []
 
     @property
     def filename(self):
@@ -147,6 +148,8 @@ class EDDHDFFileWriter(object):
             data (dict):
                 data[did] needs to return the data for did in the selected format.
 
+        It is assumed that the first data set is complete. Subsequent datasets with missing items are ignored.
+
             ToDo:
                Format management
         """
@@ -160,6 +163,11 @@ class EDDHDFFileWriter(object):
                     self.__subscan[section].create_dataset(k, dtype=c.dtype, shape=(0,) + c.shape, maxshape=(None,)+ c.shape, chunks=True)
                 else:
                     self.__subscan[section].create_dataset(k, dtype=c.dtype, shape=(0,) + c.shape, maxshape=(None,)+ c.shape, chunks=(self.__chunksize, )+ c.shape, )
+            self.__items = set(data.keys())
+
+        if set(data.keys()) != self.__items:
+            _log.warning("Missing keys in dataset: {} - Ignoring dataset!".format(",".join(self.__items.difference(data.keys()))))
+            return
 
 
         for did, dataset in self.__subscan[section].items():
