@@ -2,7 +2,6 @@
 Interface and commandline application to katcp controlled digitizer/packetizers.
 """
 
-
 from __future__ import print_function
 
 import logging
@@ -18,7 +17,7 @@ from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 # file
 __known_packetizers = {"faraday_room":{"ip":"134.104.73.132","port":7147}, "focus_cabin":{"ip":"134.104.70.65","port":7147}}
 
-log = logging.getLogger("mpikat.edd_digpack_client")
+_log = logging.getLogger("mpikat.edd_digpack_client")
 
 
 class DigitiserPacketiserError(Exception):
@@ -33,7 +32,7 @@ class DigitiserPacketiserClient(object):
 
     def __init__(self, host, port=7147):
         """
-        Wraps katcp commands to controll a digitiser/packetiser.
+        Wraps katcp commands to control a digitiser/packetiser.
 
         Args:
             host:  The host IP or name for the desired packetiser KATCP interface
@@ -48,7 +47,6 @@ class DigitiserPacketiserClient(object):
         self._client.start()
         self._capture_started = False
 
-
         self._sampling_modes = {
             4096000000: ("virtex7_dk769b", "4.096GHz", 3),
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
@@ -61,87 +59,101 @@ class DigitiserPacketiserClient(object):
             }
 
 
-
-
     def stop(self):
         self._client.stop()
+
 
     @coroutine
     def _safe_request(self, request_name, *args):
         """
-        @brief Send a request to client and prints response ok /  error message.
+        Send a request to client and prints response ok /  error message.
+
+        Args:
+            request_name: Name of the request
+            *args:        Arguments passed to the request.
         """
-        log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
+        _log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
         if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(
+            _log.error("'{}' request failed with error: {}".format(
                 request_name, response.reply.arguments[1]))
             raise DigitiserPacketiserError(response.reply.arguments[1])
         else:
-            log.debug("'{}' request successful".format(request_name))
+            _log.debug("'{}' request successful".format(request_name))
             raise Return(response)
+
 
     @coroutine
     def _check_interfaces(self):
         """
-        @brief Check if interface of digitizer is in error state.
+        Check if interface of digitizer is in error state.
         """
-        log.debug("Checking status of 40 GbE interfaces")
+        _log.debug("Checking status of 40 GbE interfaces")
         yield self._client.until_synced()
 
         @coroutine
         def _check_interface(name):
-            log.debug("Checking status of '{}'".format(name))
+            _log.debug("Checking status of '{}'".format(name))
             sensor = self._client.sensor[
                 'rxs_packetizer_40g_{}_am_lock_status'.format(name)]
             status = yield sensor.get_value()
             if not status == 0x0f:
-                log.warning("Interface '{}' in error state".format(name))
+                _log.warning("Interface '{}' in error state".format(name))
                 raise PacketiserInterfaceError(
                     "40-GbE interface '{}' did not boot".format(name))
             else:
-                log.debug("Interface '{}' is healthy".format(name))
+                _log.debug("Interface '{}' is healthy".format(name))
         yield _check_interface('iface00')
         yield _check_interface('iface01')
+
 
     @coroutine
     def set_predecimation(self, factor):
         """
-        @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
+        Set a predecimation factor for the packetizer - for e.g. factor=2 only every second sample is used.
         """
         allowedFactors = [1,2,4,8,16] # Eddy Nussbaum, private communication
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
+
     @coroutine
     def set_noise_diode_frequency(self, frequency):
         """
-        @brief Set noise diode frequency to given value.
+        Set noise diode frequency to given value.
         """
         if frequency == 0:
             yield self.set_noise_diode_firing_pattern(0.0, 0.0, "now")
         else:
             yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
 
+
     @coroutine
     def set_noise_diode_firing_pattern(self, percentage, period, start="now"):
         """
-        @brief Set noise diode frequency to given value.
+        Set noise diode frequency to given value.
+
+        Args:
+            percentage: Percentage of period which the noise diode is turned on.
+            period:     Period of fireing [s].
         """
-        log.debug("Set noise diode firing pattern")
+        _log.debug("Set noise diode firing pattern")
         yield self._safe_request("noise_source", start, percentage, period)
+
 
     @coroutine
     def set_sampling_rate(self, rate, retries=3):
         """
-        @brief      Sets the sampling rate.
+        Sets the sampling rate.
 
-        @param      rate    The sampling rate in samples per second (e.g. 2.6 GHz should be passed as 2600000000.0)
+        Args:
+            rate:    The sampling rate in samples per second (e.g. 2.6 GHz should be passed as 2600000000.0)
 
-        @detail     To allow time for reinitialisation of the packetiser firmware during this call we enforce a 10
-                    second sleep before the function returns.
+
+        To allow time for reinitialisation of the packetiser firmware during this call we enforce a 10
+        second sleep before the function returns.
         """
 
         try:
@@ -149,7 +161,7 @@ class DigitiserPacketiserClient(object):
         except KeyError as error:
             pos_freqs = "\n".join(["  - {} Hz ".format(f) for f in self._sampling_modes.keys()])
             error_msg = "Frequency {} Hz not in possible frequencies:\n{}".format(rate, pos_freqs)
-            log.error(error_msg)
+            _log.error(error_msg)
             raise DigitiserPacketiserError(error_msg)
 
         attempts = 0
@@ -162,18 +174,20 @@ class DigitiserPacketiserClient(object):
                 if attempts >= retries:
                     raise error
                 else:
-                    log.warning("Retrying system initalisation")
+                    _log.warning("Retrying system initalisation")
                     attempts += 1
                     continue
             else:
                 break
 
+
     @coroutine
     def set_bit_width(self, nbits):
         """
-        @brief      Sets the number of bits per sample out of the packetiser
+        Sets the number of bits per sample out of the packetiser
 
-        @param      nbits  The desired number of bits per sample (e.g. 8 or 12)
+        Args:
+            nbits:  The desired number of bits per sample (e.g. 8 or 12)
         """
         valid_modes = {
             8: "edd08",
@@ -185,7 +199,7 @@ class DigitiserPacketiserClient(object):
         except KeyError as error:
             msg = "Invalid bit depth, valid bit depths are: {}".format(
                 valid_modes.keys())
-            log.error(msg)
+            _log.error(msg)
             raise DigitiserPacketiserError(msg)
         yield self._safe_request("rxs_packetizer_edd_switchmode", mode)
 
@@ -193,7 +207,7 @@ class DigitiserPacketiserClient(object):
     @coroutine
     def flip_spectrum(self, flip):
         """
-        @brief Flip spectrum flip = True/False to adjust for even/odd nyquist zone
+        Flip spectrum flip = True/False to adjust for even/odd nyquist zone
         """
         if flip:
             yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
@@ -201,30 +215,32 @@ class DigitiserPacketiserClient(object):
             yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
 
 
-
     @coroutine
     def set_destinations(self, v_dest, h_dest):
         """
-        @brief      Sets the multicast destinations for data out of the packetiser
+        Sets the multicast destinations for data out of the packetiser
 
-        @param      v_dest  The vertical polarisation channel destinations
-        @param      h_dest  The horizontal polarisation channel destinations
+        Args:
+            v_dest:  The vertical polarisation channel destinations
+            h_dest:  The horizontal polarisation channel destinations
 
-        @detail     The destinations should be provided as composite stream definition
-                    strings, e.g. 225.0.0.152+3:7148 (this defines four multicast groups:
-                    225.0.0.152, 225.0.0.153, 225.0.0.154 and 225.0.0.155, all using
-                    port 7148). Currently the packetiser only accepts contiguous IP
-                    ranges for each set of destinations.
+        The destinations should be provided as composite stream definition
+        strings, e.g. 225.0.0.152+3:7148 (this defines four multicast groups:
+        225.0.0.152, 225.0.0.153, 225.0.0.154 and 225.0.0.155, all using
+        port 7148). Currently the packetiser only accepts contiguous IP
+        ranges for each set of destinations.
         """
         yield self._safe_request("capture_destination", "v", v_dest)
         yield self._safe_request("capture_destination", "h", h_dest)
 
+
     @coroutine
     def set_predecimation_factor(self, factor):
         """
-        @brief      Sets the predecimation_factorfor data out of the packetiser
+        Sets the predecimation_factorfor data out of the packetiser
 
-        @param      factor (e.g. 1,2,4,8)
+        Args:
+            factor: (e.g. 1,2,4,8)
 
         """
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
@@ -233,32 +249,37 @@ class DigitiserPacketiserClient(object):
     @coroutine
     def set_flipsignalspectrum(self, value):
         """
-        @brief      Sets the rxs-packetizer-edd-flipsignalspectrum data out of the packetiser
+        Sets the rxs-packetizer-edd-flipsignalspectrum data out of the packetiser
 
-        @param      value (e.g. 0, 1)
+        Args:
+            value: (e.g. 0, 1)
 
         """
         yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", value)
 
+
     @coroutine
     def set_interface_address(self, intf, ip):
         """
-        @brief      Set the interface address for a packetiser qsfp interface
+        Set the interface address for a packetiser qsfp interface
 
-        @param      intf   The interface specified as a string integer, e.g. '0' or '1'
-        @param      ip     The IP address to assign to the interface
+        Args:
+
+            intf:   The interface specified as a string integer, e.g. '0' or '1'
+            ip:     The IP address to assign to the interface
         """
         yield self._safe_request("rxs_packetizer_40g_source_ip_set", intf, ip)
+
 
     @coroutine
     def capture_start(self):
         """
-        @brief      Start data transmission for both polarisation channels
+        Start data transmission for both polarisation channels
 
-        @detail     This method uses the packetisers 'capture-start' method
-                    which is an aggregate command that ensures all necessary
-                    flags on the packetiser and set for data transmission.
-                    This includes the 1PPS flag required by the ROACH2 boards.
+        This method uses the packetisers 'capture-start' method which is an
+        aggregate command that ensures all necessary flags on the packetiser
+        and set for data transmission.  This includes the 1PPS flag required by
+        the ROACH2 boards.
         """
         if not self._capture_started:
             """
@@ -267,10 +288,11 @@ class DigitiserPacketiserClient(object):
             self._capture_started = True
             yield self._safe_request("capture_start", "vh")
 
+
     @coroutine
     def configure(self, config):
         """
-        @brief Applying configuration recieved in dictionary
+        Applying configuration recieved in dictionary
         """
         self._capture_started = False
         yield self._safe_request("capture_stop", "vh")
@@ -290,12 +312,14 @@ class DigitiserPacketiserClient(object):
             yield self.synchronize()
         yield self.capture_start()
 
+
     @coroutine
     def deconfigure(self):
         """
-        @brief Deconfigure. Not doing anythin
+        Deconfigure. Not doing anythin
         """
         raise Return()
+
 
     @coroutine
     def measurement_start(self):
@@ -303,11 +327,13 @@ class DigitiserPacketiserClient(object):
         """
         raise Return()
 
+
     @coroutine
     def measurement_stop(self):
         """
         """
         raise Return()
+
 
     @coroutine
     def measurement_prepare(self, config = {}):
@@ -322,13 +348,12 @@ class DigitiserPacketiserClient(object):
         raise Return()
 
 
-
     @coroutine
     def capture_stop(self):
         """
-        @brief      Stop data transmission for both polarisation channels
+        Stop data transmission for both polarisation channels
         """
-        log.warning("Not stopping data transmission")
+        _log.warning("Not stopping data transmission")
         raise Return()
         #yield self._safe_request("capture_stop", "vh")
 
@@ -336,9 +361,10 @@ class DigitiserPacketiserClient(object):
     @coroutine
     def get_sync_time(self):
         """
-        @brief      Get the current packetiser synchronisation epoch
+        Get the current packetiser synchronisation epoch
 
-        @return     The synchronisation epoch as a unix time float
+        Return:
+            The synchronisation epoch as a unix time float
         """
         response = yield self._safe_request("rxs_packetizer_40g_get_zero_time")
         sync_epoch = float(response.informs[0].arguments[0])
@@ -347,41 +373,41 @@ class DigitiserPacketiserClient(object):
     @coroutine
     def synchronize(self, unix_time=None):
         """
-        @brief      Set the synchronisation epoch for the packetiser
+        Set the synchronisation epoch for the packetiser
 
-        @param      unix_time  The unix time to synchronise at. If no value is provided a
+        Args:
+            unix_time:  The unix time to synchronise at. If no value is provided a
                                resonable value will be selected.
 
-        @detail     When explicitly setting the synchronisation time it should be a
-                    second or two into the future allow enough time for communication
-                    with the packetiser. If the time is in the past by the time the request
-                    reaches the packetiser the next 1PPS tick will be selected.
-                    Users *must* call get_sync_time to get the actual time that was set.
-                    This call will block until the sync epoch has passed (i.e. if a sync epoch
-                    is chosen that is 10 second in the future, the call will block for 10 seconds).
+        When explicitly setting the synchronisation time it should be a second
+        or two into the future allow enough time for communication with the
+        packetiser. If the time is in the past by the time the request reaches
+        the packetiser the next 1PPS tick will be selected.  Users *must* call
+        get_sync_time to get the actual time that was set.  This call will
+        block until the sync epoch has passed (i.e. if a sync epoch is chosen
+        that is 10 second in the future, the call will block for 10 seconds).
 
-        @note       The packetiser rounds to the nearest 1 PPS tick so it is recommended to
-                    set the
         """
         if not unix_time:
             unix_time = round(time.time() + 2)
         yield self._safe_request("synchronise", 0, unix_time)
         sync_epoch = yield self.get_sync_time()
         if sync_epoch != unix_time:
-            log.warning("Requested sync time {} not equal to actual sync time {}".format(
+            _log.warning("Requested sync time {} not equal to actual sync time {}".format(
                 unix_time, sync_epoch))
 
     @coroutine
     def populate_data_store(self, host, port):
         """
-        @brief Populate the data store
+        Populate the data store
 
-        @param host     ip of the data store to use
-        @param port     port of the data store
+        Args:
+            host:     ip of the data store to use
+            port:     port of the data store
         """
-        log.debug("Populate data store @ {}:{}".format(host, port))
+        _log.debug("Populate data store @ {}:{}".format(host, port))
         dataStore =  EDDDataStore(host, port)
-        log.debug("Adding output formats to known data formats")
+        _log.debug("Adding output formats to known data formats")
 
         descr = {"description": "Digitizer/Packetizer spead. One heap per packet.",
                 "ip": None,
@@ -423,9 +449,6 @@ if __name__ == "__main__":
         help='Do not send capture start command.')
     parser.add_argument('--sync-time', dest='sync_time', type=int,
         help='Use specified synctime, otherwise use current time')
-
-
-
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
         help='Set the noise diode frequency', default=-1)
     parser.add_argument('--noise-diode-pattern', dest='noise_diode_pattern', type=float, nargs=2,
@@ -442,11 +465,11 @@ if __name__ == "__main__":
     client = DigitiserPacketiserClient(args.host, port=args.port)
 
     logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
+    _logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=args.log_level.upper(),
-        logger=logger)
+        logger=_logger)
 
     actions = []
     if args.sampling_rate:
