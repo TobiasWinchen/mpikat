@@ -47,7 +47,8 @@ Configuration Settings
     corresponds to an effective sampling_rate of 1.3 GHz. Possible values are:
     1,2,4,8.
 
- noise_diode_frequency (float)
+ noise_diode_pattern (float, float) (percentage [0-1],  )
+    Noise diode i
     Frequency of the noise diode. The noise diode is 50% on and 50% off with a
     cycle duration of 2x **noise_diode_frequency**.  A negative value indicates
     always off. A value of 0 indicates always on.
@@ -115,7 +116,7 @@ _DEFAULT_CONFIG = {
         "predecimation_factor" : 1,
         "flip_spectrum": False,
         'sync_time': 0,
-        'noise_diode_frequency': -1,
+        'noise_diode_pattern': {"percentage":0, "period": 0},                  # Note: noise diode pattern can also be set in measurement prepare
         'force_reconfigure': False,
         'skip_packetizer_config': False,
         'dummy_configure': False,
@@ -239,6 +240,8 @@ class DigitizerControllerPipeline(EDDPipeline):
         else:
             log.debug("Configuration of packetizer skipped as not changed.")
 
+        yield self._client.set_noise_diode_firing_pattern(**self._config["noise_diode_pattern"])
+
 
 
     @state_change(target="streaming", allowed=["configured"], intermediate="capture_starting")
@@ -254,7 +257,8 @@ class DigitizerControllerPipeline(EDDPipeline):
     @coroutine
     def measurement_prepare(self, config_json=""):
         """@brief Set quantization factor and fft_shift parameter"""
-        yield self._client.measurement_prepare(config_json)
+        cfg = json.loads(config_json)
+        yield self._client.measurement_prepare(cfg)
 
 
 

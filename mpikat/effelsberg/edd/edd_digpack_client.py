@@ -341,9 +341,9 @@ class DigitiserPacketiserClient(object):
         """
         if "noise_diode_frequency" in config:
             yield self.set_noise_diode_frequency(config["noise_diode_frequency"])
-        elif "noise_diode_fireing_pattern" in config:
-            c = config["set_noise_diode_firing_pattern"]
-            yield self.set_noise_diode_firing_pattern(self, c["percentage"], c["period"], start="now")
+        elif "noise_diode_pattern" in config:
+            c = config["noise_diode_pattern"]
+            yield self.set_noise_diode_firing_pattern(c["percentage"], c["period"])
 
         raise Return()
 
