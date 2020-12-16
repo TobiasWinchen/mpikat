@@ -82,7 +82,7 @@ class EddMasterController(EDDPipeline):
                         Directory of a (checked out) edd_ansible git repository
                         to be used for provisioning inventory to use for ansible
         """
-        EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port)})
+        EDDPipeline.__init__(self, ip, port, {"data_store": dict(ip=redis_ip, port=redis_port), "id":"There can be only one."})
 
         self.__controller = {}
         self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)

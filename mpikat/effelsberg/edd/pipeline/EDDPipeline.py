@@ -315,8 +315,8 @@ class EDDPipeline(AsyncDeviceServer):
 
         @coroutine
         def wrapper():
-            req.reply(self.__class__.__name__)
-#            req.reply("".format(self._config['type'], self._config['id']))
+            r = "\n Id:          {}\n Classname:   {}\n Type:        {}\n".format( self._config['id'], self.__class__.__name__, self._config['type'])
+            req.reply(r)
         self.ioloop.add_callback(wrapper)
         raise AsyncReply
 
