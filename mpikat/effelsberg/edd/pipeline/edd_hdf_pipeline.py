@@ -313,7 +313,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         # error handling is done correctly
 
 
-    @state_change(target="ready", intermediate="measurement_stopping")
+    @state_change(target="ready", allowed="measuring", intermediate="measurement_stopping")
     @coroutine
     def measurement_stop(self):
         _log.info("Stopping FITS interface data transfer")
