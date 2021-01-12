@@ -274,11 +274,12 @@ class EddMasterController(EDDPipeline):
         if failed_prcts:
             raise FailReply("Failed products: {}".format(",".join(failed_prcts)))
         log.info("Updating data streams in database")
-        for product in self._config["products"]:
-            if "output_data_streams" in product:
-                for stream in value_list(product["output_data_streams"]):
-                    key = "{}:{}".format(product, stream)
-                    self.__eddDataStore.addDataStream(key, ofs)
+        for productname, product in self._config["products"].items():
+            log.debug(" - Checking {}".format(productname))
+            if "output_data_streams" in product and isinstance(product["output_data_streams"], dict):
+                for stream, streamcfg in product["output_data_streams"].items():
+                    key = "{}:{}".format(productname, stream)
+                    self.__eddDataStore.addDataStream(key, streamcfg)
 
         log.info("Successfully configured EDD")
         raise Return("Successfully configured EDD")
@@ -296,6 +297,9 @@ class EddMasterController(EDDPipeline):
             futures.append(controller.deconfigure())
         yield futures
         self._configuration_graph.set_value("")
+
+        # After deconfigure, there are no more datastreams
+        self.__eddDataStore._dataStreams.flushdb()
 
 
     @coroutine

@@ -94,6 +94,7 @@ class EDDDataStore:
         """
         @brief Add a new data stream to the store. Description as dict.
         """
+        log.debug("Adding datastream: {}".format(streamid))
         with redisfail2warn():
             if streamid in self._dataStreams:
                 nd = json.dumps(streamdescription)
@@ -116,6 +117,11 @@ class EDDDataStore:
     def removeProduct(self, cfg):
         netid = "{ip}:{port}".format(**cfg)
         self._products.delete(netid)
+        if "output_data_streams" in cfg:
+            log.debug("Remove data streams for product")
+            for k in cfg["output_data_streams"]:
+                key = "{}:{}".format(cfg['id'], k)
+                self._dataStreams.delete(key)
 
 
     def updateProduct(self, cfg):
