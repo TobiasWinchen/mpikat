@@ -433,6 +433,13 @@ class GatedSpectrometerPipeline(EDDPipeline):
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
+
+        for l in self._config["output_data_streams"].values():
+            l["central_freq"] = self._config["input_data_streams"][0]["central_freq"]
+            l["band_flip"] = self._config["input_data_streams"][0]["band_flip"]
+        self._configUpdated()
+
+
         self.__numa_node_pool = []
         # remove numa nodes with missing capabilities
         for node in numa.getInfo():

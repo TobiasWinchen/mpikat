@@ -31,7 +31,10 @@ data_formats = {
         "GatedSpectrometer:1": {
             "ip": "",
             "port": "",
-            "description": "Spead stream of integrated spectra."
+            "description": "Spead stream of integrated spectra.",
+            "central_freq": "",
+            "band_flip": ""
+
         },
         "MPIFR_EDD_Packetizer:1": {
             "ip": "",

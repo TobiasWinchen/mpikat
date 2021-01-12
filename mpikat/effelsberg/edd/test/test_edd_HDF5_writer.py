@@ -35,7 +35,6 @@ class TestEDDHdfFileWriter(unittest.TestCase):
         self.assertEqual(len(infile['scan'].keys()), 2)
 
 
-
     def test_gated_spectrometer_data_insert(self):
         f = EDDHDFFileWriter()
         self.addCleanup(os.remove, f.filename)
@@ -46,8 +45,10 @@ class TestEDDHdfFileWriter(unittest.TestCase):
         for n,d in gated_spectrometer_format(nchannels).items():
             data[n] = np.empty(**d)
 
+
         f.newSubscan()
-        f.addData('mysection', data)
+        attr = {'foo':'bar', 'nu': 3}
+        f.addData('mysection', data, attr)
         f.close()
 
         infile = h5py.File(f.filename, "r")
@@ -61,6 +62,8 @@ class TestEDDHdfFileWriter(unittest.TestCase):
             idx = data[k] == data[k]
             self.assertTrue((data[k] == dataset[k][0])[idx].all())
 
+        self.assertEqual(dataset.attrs['foo'], 'bar')
+        self.assertEqual(dataset.attrs['nu'], 3)
 
 
 

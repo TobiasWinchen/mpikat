@@ -222,17 +222,23 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             if "hdf5_group_prefix" in stream_description:
                 hdf5_group = stream_description["hdf5_group_prefix"]
             if hdf5_group not in self.mc_subscriptions:
-                self.mc_subscriptions[hdf5_group] = dict(groups=[], port=stream_description['port'])
+                self.mc_subscriptions[hdf5_group] = dict(groups=[], port=stream_description['port'], attributes={})
             self.mc_subscriptions[hdf5_group]['groups'].append(stream_description['ip'])
             if self.mc_subscriptions[hdf5_group]['port'] != stream_description['port']:
                 raise RuntimeError("All input streams of one group have to use the same port!!!")
 
+            for key in stream_description:
+                if key in ["ip", "port"]:
+                    continue
+                self.mc_subscriptions[hdf5_group]['attributes'][key] = stream_description[key]
 
 
     def _package_writer(self, data):
         if self._state == "measuring":
             _log.info('Writing data to section: {}'.format(data[0]))
-            self._output_file.addData(data[0], data[1])
+            self._output_file.addData(data[0], data[1], )
+
+
         else:
             _log.debug("Not measuring, Dropping package")
 
@@ -253,7 +259,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
 
         self._capture_threads = []
         for hdf5_group_prefix, mcg in self.mc_subscriptions.items():
-            spead_handler = GatedSpectrometerSpeadHandler(hdf5_group_prefix)
+            spead_handler = GatedSpectrometerSpeadHandler(hdf5_group_prefix, mcg['attributes'])
             ct = SpeadCapture(mcg["groups"], mcg["port"],
                                                self._capture_interface,
                                                spead_handler, self._package_writer, affinity)
@@ -320,6 +326,8 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         self._output_file.flush()
         # ToDo: There probably should be an output queue so that time ordering
         # is not becoming an issue
+
+
 
 
 
@@ -446,11 +454,12 @@ class GatedSpectrometerSpeadHandler(object):
     Parse heaps of gated spectrometer output from spead stream and create data dict.
 
     """
-    def __init__(self, group_prefix=""):
+    def __init__(self, group_prefix="", attributes={}):
 
        # self.plottingQueue = queue.PriorityQueue()
         #self.__delay = delay
         self.__group_prefix = group_prefix
+        self.__attributes = attributes
 
         #Description of heap items
         # ToDo: move to gated spectrometer or whereever the stream format is
@@ -464,6 +473,7 @@ class GatedSpectrometerSpeadHandler(object):
         self.ig.add_item(5637, "sync_time", "", (6,), dtype=">u1")
         self.ig.add_item(5638, "sampling_rate", "", (6,), dtype=">u1")
         self.ig.add_item(5639, "naccumulate", "", (6,), dtype=">u1")
+
 
     def __call__(self, heap):
         """
@@ -518,7 +528,7 @@ class GatedSpectrometerSpeadHandler(object):
         data['integration_time'] = np.array([number_of_input_samples / sampling_rate])
         data['saturated_samples'] = np.array([-42])
 
-        return section_id, data
+        return section_id, data, self.attributes
 
 
 if __name__ == "__main__":

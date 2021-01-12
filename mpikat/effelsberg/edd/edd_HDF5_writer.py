@@ -139,7 +139,7 @@ class EDDHDFFileWriter(object):
         self.__subscan = self._file.create_group(scanid)
 
 
-    def addData(self, section, data):
+    def addData(self, section, data, attributes = {}):
         """
         Add data block to a section of the current subscan.
 
@@ -147,6 +147,8 @@ class EDDHDFFileWriter(object):
             section (str): Name of the section
             data (dict):
                 data[did] needs to return the data for did in the selected format.
+            attributes (dict):
+                First occurence of any key will be added as attribute to the dataset.
 
         It is assumed that the first data set is complete. Subsequent datasets with missing items are ignored.
 
@@ -176,6 +178,11 @@ class EDDHDFFileWriter(object):
             _log.debug('Resizing {}: {} -> {}'.format(dataset.name, dataset.shape, tuple(shape)))
             dataset.resize(tuple(shape))
             dataset[-1] = data[did]
+
+        for key, value in attributes.items():
+            if key not in self.__subscan[section].attrs.keys():
+                _log.debug("Adding attribute: {} = {} to section {}".format(key, value, section))
+                self.__subscan[section].attrs[key] = value
 
 
     def close(self):
