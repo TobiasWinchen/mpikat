@@ -113,7 +113,7 @@ class EDDHDFFileWriter(object):
         self.__filename = ofile
         self.__chunksize = chunksize
 
-        self.__file = h5py.File(self.__filename, mode)
+        self._file = h5py.File(self.__filename, mode)
 
         self.__subscan_id = 0
 
@@ -129,14 +129,14 @@ class EDDHDFFileWriter(object):
         Starts a new subscan.
         """
 
-        if "scan" in self.__file:
-            scannum = len(self.__file['scan'].keys())
+        if "scan" in self._file:
+            scannum = len(self._file['scan'].keys())
         else:
             scannum = 0
 
         scanid = "scan/{:03}".format(scannum)
         _log.debug('Starting new subscan: {}'.format(scanid))
-        self.__subscan = self.__file.create_group(scanid)
+        self.__subscan = self._file.create_group(scanid)
 
 
     def addData(self, section, data):
@@ -183,11 +183,11 @@ class EDDHDFFileWriter(object):
         Closes the HDf File
         """
         _log.debug('Closing: {}'.format(self.filename))
-        self.__file.close()
+        self._file.close()
 
 
     def flush(self):
         """
         Flush the HDF Buffers.
         """
-        self.__file.flush()
+        self._file.flush()
