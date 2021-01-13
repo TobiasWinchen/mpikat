@@ -528,7 +528,7 @@ class GatedSpectrometerSpeadHandler(object):
         data['integration_time'] = np.array([number_of_input_samples / sampling_rate])
         data['saturated_samples'] = np.array([-42])
 
-        return section_id, data, self.attributes
+        return section_id, data, self.__attributes
 
 
 if __name__ == "__main__":
