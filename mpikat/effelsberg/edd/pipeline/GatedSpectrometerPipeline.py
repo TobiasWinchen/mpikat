@@ -437,6 +437,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         for l in self._config["output_data_streams"].values():
             l["central_freq"] = self._config["input_data_streams"][0]["central_freq"]
             l["band_flip"] = self._config["input_data_streams"][0]["band_flip"]
+            l["receiver_id"] = self._config["input_data_streams"][0]["receiver_id"]
         self._configUpdated()
 
 

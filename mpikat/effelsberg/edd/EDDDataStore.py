@@ -33,8 +33,8 @@ data_formats = {
             "port": "",
             "description": "Spead stream of integrated spectra.",
             "central_freq": "",
+            "receiver_id": "",  # Passign down all informations via the data format is only a hack as any product should not what to pass down from upstream to downstream. Only a full desciption of itself should be passed. If a data writer needs all information, it should recnstrut it from the entreis in the data store. 
             "band_flip": ""
-
         },
         "MPIFR_EDD_Packetizer:1": {
             "ip": "",
@@ -44,6 +44,7 @@ data_formats = {
             "sync_time" : 0,
             "band_flip": False,
             "central_freq": 0,
+            "receiver_id": "",
             "polarization": None,
             "samples_per_heap": 4096,
             "description": "Spead stream of time-domain packetizer data as in EDD ICD."
