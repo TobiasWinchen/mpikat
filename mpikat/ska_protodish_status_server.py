@@ -25,6 +25,7 @@ sensor_map['anc_wind_direction'] =  dict(name='wind-direction', converter=None, 
 sensor_map['anc_air_temperature'] =  dict(name='air-temperature', converter=None, type="float")
 sensor_map['anc_air_pressure'] =  dict(name='air-pressure', converter=None, type="float")
 sensor_map['anc_air_relative_humidity'] =  dict(name='humidity', converter=None, type="float")
+sensor_map['anc_weather_rain'] =  dict(name='rain', converter=None, type="float")
 
 
 
