@@ -23,7 +23,7 @@ sensor_map['anc_mean_wind_speed'] =  dict(name='wind-speed', converter=None, typ
 sensor_map['anc_gust_wind_speed'] =  dict(name='wind-speed-gusts', converter=None, type="float")
 sensor_map['anc_wind_direction'] =  dict(name='wind-direction', converter=None, type="float")
 sensor_map['anc_air_temperature'] =  dict(name='air-temperature', converter=None, type="float")
-sensor_map['anc_air_temperature'] =  dict(name='air-pressure', converter=None, type="float")
+sensor_map['anc_air_pressure'] =  dict(name='air-pressure', converter=None, type="float")
 sensor_map['anc_air_relative_humidity'] =  dict(name='humidity', converter=None, type="float")
 
 
