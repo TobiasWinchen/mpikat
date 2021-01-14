@@ -193,12 +193,14 @@ class EDDDataStore:
 
 
     def addTelescopeDataItem(self, key, pars):
+        log.debug("Add telescope data item {}".format(key))
         with redisfail2warn():
             pars['value'] = pars['default']
             try:
                 self._telescopeMetaData.hmset(key, pars)
             except Exception as E:
                 log.error("Error setting {}".format(key))
+                log.exception(E)
 
     def setTelescopeDataItem(self, key, value):
         with redisfail2warn():
