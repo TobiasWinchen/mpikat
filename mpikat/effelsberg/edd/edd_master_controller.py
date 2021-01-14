@@ -688,6 +688,7 @@ class EddMasterController(EDDPipeline):
 
         self.__controller = {}
         self.__eddDataStore._products.flushdb()
+        self.__eddDataStore._dataStreams.flushdb()
         self.__provisioned = None
         self._provision_sensor.set_value("Unprovisioned")
         self._configuration_graph.set_value("")
