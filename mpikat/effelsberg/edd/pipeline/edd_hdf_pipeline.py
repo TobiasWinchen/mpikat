@@ -68,84 +68,31 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             port: Port number to serve on
         """
         EDDPipeline.__init__(self, ip, port, dict(output_directory="/mnt",
-            input_data_streams =[
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.172",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.173",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.174",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.175",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.176",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.177",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.178",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.179",
-                "port": "7152",
-                "hdf5_group_prefix": "S"
-            },
-
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.182",
-                "port": "7152",
-                "hdf5_group_prefix": "P"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.183",
-                "port": "7152",
-                "hdf5_group_prefix": "P"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.184",
-                "port": "7152",
-                "hdf5_group_prefix": "P"
-            },
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.1.185",
-                "port": "7152",
-                "hdf5_group_prefix": "P"
-            }
-
-
-
+                input_data_streams = [
+                {
+                    "source": "gated_spectrometer_0:polarization_0_0",
+                    "hdf5_group_prefix": "P",
+                    "format": "GatedSpectrometer:1"
+                },
+                {
+                    "source": "gated_spectrometer_0:polarization_0_1",
+                    "hdf5_group_prefix": "P",
+                    "format": "GatedSpectrometer:1"
+                },
+                {
+                    "source": "gated_spectrometer_1:polarization_1_0",
+                    "hdf5_group_prefix": "P",
+                    "format": "GatedSpectrometer:1"
+                },
+                {
+                    "source": "gated_spectrometer_1:polarization_1_1",
+                    "hdf5_group_prefix": "P",
+                    "format": "GatedSpectrometer:1"
+                }
             ],
+                plot={"P0_ND_0": 0, "P0_ND_1": 0, "P1_ND_0": 1, "P1_ND_1": 1},# Dictionary of prefixes to plot  with values indicatin subplot to use, e.g.: plot": {"P0_ND_0": 0, "P0_ND_1": 0, "P1_ND_0": 1, "P1_ND_1": 1},
+            nplot= 10.,       # update plot every 10 s
+
             default_hdf5_group_prefix="S",
             id="hdf5_writer", type="hdf5_writer"))
         self.mc_interface = []
@@ -194,6 +141,12 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._current_file_size)
 
+        self._bandpass = Sensor.string(
+            "bandpass",
+            description="band-pass data (base64 encoded)",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._bandpass)
+
 
 
 
@@ -229,6 +182,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
 
         #ToDo: allow streams with multiple multicast groups and multiple ports
         self.mc_subscriptions = {}
+
         for stream_description in value_list(self._config['input_data_streams']):
             hdf5_group = self._config["default_hdf5_group_prefix"]
             if "hdf5_group_prefix" in stream_description:
@@ -249,12 +203,107 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         if self._state == "measuring":
             _log.info('Writing data to section: {}'.format(data[0]))
             self._output_file.addData(data[0], data[1], )
-
-
         else:
             _log.debug("Not measuring, Dropping package")
 
+        if data[0] not in self.__data_snapshot:
+            self.__data_snapshot[data[0]] = []
 
+        self.__data_snapshot[data[0]].append(data[1])
+
+
+    @coroutine
+    def plot_wrapper(self):
+        try:
+            self.plot()
+        except Excepton as E:
+            _log.error("Error creating plot")
+            _log.exception(E)
+
+    @coroutine
+    def plot(self):
+        """
+
+        """
+        _log.debug("Called plot")
+        if self.__plotting:
+            log.warning("Previous plot not finished, dropping plot!")
+            return
+        self.__plotting = True
+
+        def plot_script(conn, data, plotmap, ndisplay_channels=1024):
+            """
+            data dict: [key] [list of data sets]
+            plotmap dict: [key] figure numer
+            """
+            import matplotlib as mpl
+            mpl.use('Agg')
+            import numpy as np
+            import pylab as plt
+            import astropy.time
+
+            import sys
+            if sys.version_info[0] >=3:
+                import io
+            else:
+                import cStringIO as io
+
+            import base64
+            mpl.rcParams.update(mpl.rcParamsDefault)
+            mpl.use('Agg')
+
+            figsize = {2: (8, 4), 4: (8, 8)}
+            fig, subs = plt.subplots(len(data)// 2, 2, figsize=figsize[len(data)])
+
+            for k, ds in data.items():
+                S = np.zeros(ndisplay_channels)
+                T = 0
+                for d in ds:
+                    di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
+                    if np.isfinite(di).all():
+                        S += di
+                        T += d['integration_time']
+                subs.flat[plotmap[k]].plot(10. * np.log10(S), label=k)
+
+            fig.suptitle('{}'.format(astropy.time.Time(d['timestamp'][-1], format='unix').isot))
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+            fig_buffer = io.StringIO()
+            fig.savefig(fig_buffer, format='png')
+            fig_buffer.seek(0)
+            b64 = base64.b64encode(fig_buffer.read())
+            conn.send(b64)
+            conn.close()
+
+        _log.debug("Create pipe")
+        parent_conn, child_conn = Pipe()
+        _log.debug("Preparing Subprocess")
+
+        p = Process(target=plot_script, args=(child_conn, self.__data_snapshot, self._config['plot'] ))
+        _log.debug("Starting Subprocess")
+        p.start()
+        self.__data_snapshot = {}
+        _log.debug("Waiting for subprocess to finish")
+        while p.is_alive():
+            _log.debug("Still waiting ...")
+            yield sleep(0.5)
+        #p.join()
+        _log.debug("Receiving data")
+        if p.exitcode !=0:
+            _log.error('Subprocess returned with exitcode: {}'.format(p.exitcode))
+        else:
+            _log.debug('Subprocess exitcode: {}'.format(p.exitcode))
+
+        try:
+            plt = parent_conn.recv()
+            _log.debug("Received {} bytes".format(len(plt)))
+        except Exception as E:
+            _log.error('Error communicating with subprocess:\n {}'.format(E))
+            return
+        _log.debug("Setting bandpass sensor with timestamp")
+        self._bandpass.set_value(plt, timestamp=found_pair[2])
+        _log.debug("Ready for next plot")
+
+        self.__plotting = False
 
 
     @state_change(target="ready", allowed=["configured"], intermediate="capture_starting")
@@ -269,6 +318,10 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         affinity = numa.getInfo()[nic_description['node']]['cores']
 
 
+        self.__data_snapshot = {}
+        self.__plotting = False
+
+
         self._capture_threads = []
         for hdf5_group_prefix, mcg in self.mc_subscriptions.items():
             spead_handler = GatedSpectrometerSpeadHandler(hdf5_group_prefix, mcg['attributes'])
@@ -277,6 +330,11 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                                                spead_handler, self._package_writer, affinity)
             ct.start()
             self._capture_threads.append(ct)
+
+        if self._config['plot']:
+            _log.debug("Starting Callback")
+            self.__plot_callback = PeriodicCallback(self.plot_wrapper, self._config['nplot'] * 1000. )
+            self.__plot_callback.start()
 
 
     @coroutine

@@ -448,7 +448,7 @@ class FitsInterfaceServer(EDDPipeline):
             for x in pks:
                 plottingQueue.put(x)
             return
-        log.error("Creating plot with matching pair")
+        log.debug("Creating plot with matching pair")
 
         if self.__plotting:
             log.warning("Previous plot not finished, dropping plot!")
@@ -540,11 +540,11 @@ class FitsInterfaceServer(EDDPipeline):
 
         try:
             plt = parent_conn.recv()
-            log.error("Received {} bytes".format(len(plt)))
+            log.debug("Received {} bytes".format(len(plt)))
         except Exception as E:
             log.error('Error communicating with subprocess:\n {}'.format(E))
             return
-        log.error("Setting bandpass sensor with timestamp")
+        log.debug("Setting bandpass sensor with timestamp")
         self._bandpass.set_value(plt, timestamp=found_pair[2])
         log.debug("Ready for next plot")
         self.__plotting = False
