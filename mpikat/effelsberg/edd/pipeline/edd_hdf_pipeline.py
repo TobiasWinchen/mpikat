@@ -300,7 +300,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             _log.error('Error communicating with subprocess:\n {}'.format(E))
             return
         _log.debug("Setting bandpass sensor with timestamp")
-        self._bandpass.set_value(plt, timestamp=found_pair[2])
+        self._bandpass.set_value(plt)
         _log.debug("Ready for next plot")
 
         self.__plotting = False
