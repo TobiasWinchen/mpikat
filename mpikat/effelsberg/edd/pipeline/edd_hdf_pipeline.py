@@ -206,10 +206,11 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         else:
             _log.debug("Not measuring, Dropping package")
 
-        if data[0] not in self.__data_snapshot:
-            self.__data_snapshot[data[0]] = []
+        if self._config['plot']:
+            if data[0] not in self.__data_snapshot:
+                self.__data_snapshot[data[0]] = []
 
-        self.__data_snapshot[data[0]].append(data[1])
+            self.__data_snapshot[data[0]].append(data[1])
 
 
     @coroutine
