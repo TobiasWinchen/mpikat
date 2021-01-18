@@ -11,6 +11,8 @@ from mpikat.effelsberg.edd.edd_HDF5_writer import EDDHDFFileWriter, gated_spectr
 class TestEDDHdfFileWriter(unittest.TestCase):
     def test_auto_filename(self):
         f = EDDHDFFileWriter()
+
+        self.assertTrue(f.getFileSize())
         self.addCleanup(os.remove, f.filename)
         f.close()
         self.assertTrue(os.path.exists(f.filename))

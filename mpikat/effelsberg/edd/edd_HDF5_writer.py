@@ -123,6 +123,11 @@ class EDDHDFFileWriter(object):
     def filename(self):
         return self.__filename
 
+    def getFileSize(self):
+        """
+        Returns current size of file in bytes.
+        """
+        return os.path.getsize(self.__filename)
 
     def newSubscan(self):
         """

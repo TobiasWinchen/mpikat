@@ -182,6 +182,18 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._complete_heaps)
 
+        self._current_file = Sensor.string(
+            "current-file",
+            description="Current filename.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._current_file)
+
+        self._current_file_size = Sensor.float(
+            "current-file-size",
+            description="Current filesize.",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._current_file_size)
+
 
 
 
@@ -284,6 +296,9 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         conditional_update(self._incomplete_heaps, incomplete_heaps, timestamp=timestamp)
         conditional_update(self._complete_heaps, complete_heaps, timestamp=timestamp)
 
+        if self._output_file:
+            conditional_update(self._current_file_size, self._output_file.getFileSize(), timestamp=timestamp)
+
 
 
     @state_change(target="set", allowed=["ready", "measurement_starting", "configured", "streaming"], intermediate="measurement_preparing")
@@ -301,6 +316,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             else:
                 file_id = None
             self._output_file = EDDHDFFileWriter(path=self._config["output_directory"], file_id_no = file_id)
+            self._current_file.set_value(self._output_file.filename)
 
 
         if ("override_newsubscan"  in config and config["override_newsubscan"]):
