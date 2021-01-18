@@ -106,7 +106,7 @@ from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 import mpikat.utils.numa as numa
 
 from tornado.gen import coroutine
-from katcp import Sensor, AsyncReply, FailReply
+from katcp import Sensor, AsyncReply, FailReply, Message
 
 import os
 import time
@@ -356,24 +356,29 @@ class GatedSpectrometerPipeline(EDDPipeline):
         self._polarization_sensors[streamid]["input-buffer-fill-level"] = Sensor.float(
                 "input-buffer-fill-level-{}".format(streamid),
                 description="Fill level of the input buffer for polarization{}".format(streamid),
+                initial_status=Sensor.UNKNOWN,
                 params=[0, 1])
         self.add_sensor(self._polarization_sensors[streamid]["input-buffer-fill-level"])
         self._polarization_sensors[streamid]["input-buffer-total-write"] = Sensor.float(
                 "input-buffer-total-write-{}".format(streamid),
                 description="Total write into input buffer for polarization {}".format(streamid),
+                initial_status=Sensor.UNKNOWN,
                 params=[0, 1])
 
         self.add_sensor(self._polarization_sensors[streamid]["input-buffer-total-write"])
         self._polarization_sensors[streamid]["output-buffer-fill-level"] = Sensor.float(
                 "output-buffer-fill-level-{}".format(streamid),
-                description="Fill level of the output buffer for polarization {}".format(streamid)
+                description="Fill level of the output buffer for polarization {}".format(streamid),
+                initial_status=Sensor.UNKNOWN
                 )
         self._polarization_sensors[streamid]["output-buffer-total-read"] = Sensor.float(
                 "output-buffer-total-read-{}".format(streamid),
-                description="Total read from output buffer for polarization {}".format(streamid)
+                description="Total read from output buffer for polarization {}".format(streamid),
+                initial_status=Sensor.UNKNOWN
                 )
         self.add_sensor(self._polarization_sensors[streamid]["output-buffer-total-read"])
         self.add_sensor(self._polarization_sensors[streamid]["output-buffer-fill-level"])
+        self.mass_inform(Message.inform('interface-changed'))
 
 
     @coroutine
