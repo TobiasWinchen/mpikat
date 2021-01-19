@@ -296,7 +296,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                             T += d['integration_time']
                             timestamp = d['timestamp'][-1]
 
-                    sub.plot(10. * np.log10(S / T), label=k.replace('_', ' '))
+                    sub.plot(10. * np.log10(S / T), label="{} (T = {.2} s)".format(k.replace('_', ' '), T))
                 sub.legend()
                 sub.set_xlabel('Channel')
                 sub.set_ylabel('PSd [dB]')
