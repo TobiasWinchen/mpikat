@@ -303,7 +303,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             if timestamp: 
                 fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
             else:
-                fig.suptitle('ERROR PLOTTING BANDPASS')
+                fig.suptitle('NO DATA {}'.format(astropy.time.Time.now().isot))
 
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
