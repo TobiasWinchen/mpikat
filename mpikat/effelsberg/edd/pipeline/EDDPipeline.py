@@ -50,6 +50,7 @@ import socket
 import sys
 if sys.version_info[0] >=3:
     unicode_type = str
+    types.ClassType = None
 else:
     unicode_type = unicode
 
