@@ -278,8 +278,6 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             figsize = {2: (8, 4), 4: (8, 8)}
             fig = plt.figure(figsize=figsize[len(ko)])
 
-
-
             timestamp = None
 
             # loop over suplotindices
@@ -290,8 +288,8 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                     T = 0
 
                     if k not in data:
-                        _log.warning("{} not in data!".format(k))
-                        _log.debug("Data: {}".format(data))
+                        #_log.warning("{} not in data!".format(k))
+                        #_log.debug("Data: {}".format(data))
                         continue
 
                     for d in data[k]:
