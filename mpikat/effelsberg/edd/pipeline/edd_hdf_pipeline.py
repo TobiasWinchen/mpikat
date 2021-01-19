@@ -296,11 +296,11 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                             T += d['integration_time']
                             timestamp = d['timestamp'][-1]
 
-                    sub.plot(10. * np.log10(S), label=k.replace('_', '\_'))
+                    sub.plot(10. * np.log10(S / T), label=k.replace('_', ' '))
                 sub.legend()
                 sub.set_xlabel('Channel')
                 sub.set_ylabel('PSd [dB]')
-            if timestamp: 
+            if timestamp:
                 fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
             else:
                 fig.suptitle('NO DATA {}'.format(astropy.time.Time.now().isot))
