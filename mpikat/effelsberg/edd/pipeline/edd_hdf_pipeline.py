@@ -23,6 +23,7 @@ else:
 
 import multiprocessing
 multiprocessing.set_start_method('spawn')
+lock = multiprocessing.Lock()
 
 import spead2
 import spead2.recv
@@ -235,6 +236,9 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         """
 
         """
+        if not lock.acquire(block=False):
+            return
+
         _log.debug("Called plot")
         if self.__plotting:
             log.warning("Previous plot not finished, dropping plot!")
@@ -348,6 +352,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         _log.debug("Ready for next plot")
 
         self.__plotting = False
+        lock.release()
 
 
     @state_change(target="ready", allowed=["configured"], intermediate="capture_starting")
