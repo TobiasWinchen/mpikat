@@ -72,25 +72,33 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                 {
                     "source": "gated_spectrometer_0:polarization_0_0",
                     "hdf5_group_prefix": "P",
-                    "format": "GatedSpectrometer:1"
+                    "format": "GatedSpectrometer:1",
+                    "ip": "225.0.1.183",
+                    "port": "7152"
                 },
                 {
                     "source": "gated_spectrometer_0:polarization_0_1",
                     "hdf5_group_prefix": "P",
-                    "format": "GatedSpectrometer:1"
+                    "format": "GatedSpectrometer:1",
+                    "ip": "225.0.1.182",
+                    "port": "7152"
                 },
                 {
                     "source": "gated_spectrometer_1:polarization_1_0",
                     "hdf5_group_prefix": "P",
-                    "format": "GatedSpectrometer:1"
+                    "format": "GatedSpectrometer:1",
+                    "ip": "225.0.1.185",
+                    "port": "7152"
                 },
                 {
                     "source": "gated_spectrometer_1:polarization_1_1",
                     "hdf5_group_prefix": "P",
-                    "format": "GatedSpectrometer:1"
+                    "format": "GatedSpectrometer:1",
+                    "ip": "225.0.1.184",
+                    "port": "7152"
                 }
             ],
-                plot={"P0_ND_0": 0, "P0_ND_1": 0, "P1_ND_0": 1, "P1_ND_1": 1},# Dictionary of prefixes to plot  with values indicatin subplot to use, e.g.: plot": {"P0_ND_0": 0, "P0_ND_1": 0, "P1_ND_0": 1, "P1_ND_1": 1},
+                plot={"P0_ND_0": 121, "P0_ND_1": 121, "P1_ND_0": 122, "P1_ND_1": 122},# Dictionary of prefixes to plot  with values indicatin subplot to use, e.g.: plot": {"P0_ND_0": 0, "P0_ND_1": 0, "P1_ND_0": 1, "P1_ND_1": 1},
             nplot= 10.,       # update plot every 10 s
 
             default_hdf5_group_prefix="S",
@@ -206,10 +214,11 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         else:
             _log.debug("Not measuring, Dropping package")
 
-        if data[0] not in self.__data_snapshot:
-            self.__data_snapshot[data[0]] = []
+        if self._config['plot']:
+            if data[0] not in self.__data_snapshot:
+                self.__data_snapshot[data[0]] = []
 
-        self.__data_snapshot[data[0]].append(data[1])
+            self.__data_snapshot[data[0]].append(data[1])
 
 
     @coroutine
@@ -251,23 +260,50 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             import base64
             mpl.rcParams.update(mpl.rcParamsDefault)
             mpl.use('Agg')
+            ########################################################################
+            # Actual plot routine
+            ########################################################################
+            # Reorder by subplot
+            ko = {}
+            for k,i in plotmap.items():
+                if i not in ko:
+                    ko[i] = []
+                ko[i].append(k)
 
             figsize = {2: (8, 4), 4: (8, 8)}
-            fig, subs = plt.subplots(len(data)// 2, 2, figsize=figsize[len(data)])
+            fig = plt.figure(figsize=figsize[len(ko)])
+            timestamp = None
+            # loop over suplotindices
+            for si, plot_keys in ko.items():
+                sub = fig.add_subplot(si)
+                for k in sorted(plot_keys):
+                    S = np.zeros(ndisplay_channels)
+                    T = 0
+                    if k not in data:
+                        _log.warning("{} not in data!".format(k))
+                        _log.debug("Data: {}".format(data))
+                        continue
 
-            for k, ds in data.items():
-                S = np.zeros(ndisplay_channels)
-                T = 0
-                for d in ds:
-                    di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
-                    if np.isfinite(di).all():
-                        S += di
-                        T += d['integration_time']
-                subs.flat[plotmap[k]].plot(10. * np.log10(S), label=k)
-
-            fig.suptitle('{}'.format(astropy.time.Time(d['timestamp'][-1], format='unix').isot))
+                    for d in data[k]:
+                        di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
+                        if np.isfinite(di).all():
+                            S += di
+                            T += d['integration_time']
+                            timestamp = d['timestamp'][-1]
+                    sub.plot(10. * np.log10(S), label=k.replace('_', '\_'))
+                sub.legend()
+                sub.set_xlabel('Channel')
+                sub.set_ylabel('PSd [dB]')
+            if timestamp: 
+                fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
+            else:
+                fig.suptitle('ERROR PLOTTING BANDPASS')
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-            fig_buffer = io.StringIO()
+
+            ########################################################################
+            # End of plot
+            ########################################################################
+            fig_buffer = io.BytesIO()
             fig.savefig(fig_buffer, format='png')
             fig_buffer.seek(0)
             b64 = base64.b64encode(fig_buffer.read())
