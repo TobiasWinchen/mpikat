@@ -21,7 +21,8 @@ if sys.version_info[0] >=3:
 else:
     import Queue as queue       # In python 3 this will be queue
 
-from multiprocessing import Process, Pipe
+import multiprocessing
+multiprocessing.set_start_method('spawn')
 
 import spead2
 import spead2.recv
@@ -318,10 +319,10 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             conn.close()
 
         _log.debug("Create pipe")
-        parent_conn, child_conn = Pipe()
+        parent_conn, child_conn = multiprocessing.Pipe()
         _log.debug("Preparing Subprocess")
 
-        p = Process(target=plot_script, args=(child_conn, self.__data_snapshot, self._config['plot'] ))
+        p = multiprocessing.Process(target=plot_script, args=(child_conn, self.__data_snapshot, self._config['plot'] ))
         _log.debug("Starting Subprocess")
         p.start()
         self.__data_snapshot = {}
