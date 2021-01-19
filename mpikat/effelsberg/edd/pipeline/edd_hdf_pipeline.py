@@ -252,22 +252,41 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             import base64
             mpl.rcParams.update(mpl.rcParamsDefault)
             mpl.use('Agg')
+            ########################################################################
+            # Actual plot routine
+            ########################################################################
+            # Reorder by subplot
+            ko = {}
+            for k,i in plotmap.items():
+                if i not in ko:
+                    ko[i] = []
+                ko[i].append(k)
 
             figsize = {2: (8, 4), 4: (8, 8)}
-            fig, subs = plt.subplots(len(data)// 2, 2, figsize=figsize[len(data)])
+            fig = plt.figure(figsize=figsize[len(ko)])
 
-            for k, ds in data.items():
-                S = np.zeros(ndisplay_channels)
-                T = 0
-                for d in ds:
-                    di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
-                    if np.isfinite(di).all():
-                        S += di
-                        T += d['integration_time']
-                subs.flat[plotmap[k]].plot(10. * np.log10(S), label=k)
+            # loop over suplotindices
+            for si, plot_keys in ko.items():
+                sub = fig.add_subplot(si)
+                for k in sorted(plot_keys):
+                    S = np.zeros(ndisplay_channels)
+                    T = 0
+                    for d in data[k]:
+                        di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
+                        if np.isfinite(di).all():
+                            S += di
+                            T += d['integration_time']
+                    sub.plot(10. * np.log10(S), label=k.replace('_', '\_'))
+                sub.legend()
+                sub.set_xlabel('Channel')
+                sub.set_ylabel('PSd [dB]')
 
             fig.suptitle('{}'.format(astropy.time.Time(d['timestamp'][-1], format='unix').isot))
             fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+            ########################################################################
+            # End of plot
+            ########################################################################
             fig_buffer = io.StringIO()
             fig.savefig(fig_buffer, format='png')
             fig_buffer.seek(0)
