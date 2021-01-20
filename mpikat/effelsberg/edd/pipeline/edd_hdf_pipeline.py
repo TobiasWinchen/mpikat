@@ -21,10 +21,6 @@ if sys.version_info[0] >=3:
 else:
     import Queue as queue       # In python 3 this will be queue
 
-import multiprocessing
-multiprocessing.set_start_method('spawn')
-lock = multiprocessing.Lock()
-
 import spead2
 import spead2.recv
 
@@ -236,121 +232,122 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         """
 
         """
-        if not lock.acquire(block=False):
-            return
-
-        _log.debug("Called plot")
-        if self.__plotting:
-            log.warning("Previous plot not finished, dropping plot!")
-            return
-        self.__plotting = True
-
-        def plot_script(conn, data, plotmap, ndisplay_channels=1024):
-            """
-            data dict: [key] [list of data sets]
-            plotmap dict: [key] figure numer
-            """
-            import matplotlib as mpl
-            mpl.use('Agg')
-            import numpy as np
-            import pylab as plt
-            import astropy.time
-
-            import sys
-            if sys.version_info[0] >=3:
-                import io
-            else:
-                import cStringIO as io
-
-            import base64
-            mpl.rcParams.update(mpl.rcParamsDefault)
-            mpl.use('Agg')
-            ########################################################################
-            # Actual plot routine
-            ########################################################################
-            # Reorder by subplot
-            ko = {}
-            for k,i in plotmap.items():
-                if i not in ko:
-                    ko[i] = []
-                ko[i].append(k)
-
-            figsize = {2: (8, 4), 4: (8, 8)}
-            fig = plt.figure(figsize=figsize[len(ko)])
-
-            timestamp = None
-
-            # loop over suplotindices
-            for si, plot_keys in ko.items():
-                sub = fig.add_subplot(si)
-                for k in sorted(plot_keys):
-                    S = np.zeros(ndisplay_channels)
-                    T = 0
-
-                    if k not in data:
-                        #_log.warning("{} not in data!".format(k))
-                        #_log.debug("Data: {}".format(data))
-                        continue
-
-                    for d in data[k]:
-                        di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
-                        if np.isfinite(di).all():
-                            S += di
-                            T += d['integration_time']
-                            timestamp = d['timestamp'][-1]
-
-                    sub.plot(10. * np.log10(S / T), label="{} (T = {.2} s)".format(k.replace('_', ' '), T))
-                sub.legend()
-                sub.set_xlabel('Channel')
-                sub.set_ylabel('PSd [dB]')
-            if timestamp:
-                fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
-            else:
-                fig.suptitle('NO DATA {}'.format(astropy.time.Time.now().isot))
-
-            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-            ########################################################################
-            # End of plot
-            ########################################################################
-            fig_buffer = io.BytesIO()
-            fig.savefig(fig_buffer, format='png')
-            fig_buffer.seek(0)
-            b64 = base64.b64encode(fig_buffer.read())
-            conn.send(b64)
-            conn.close()
-
-        _log.debug("Create pipe")
-        parent_conn, child_conn = multiprocessing.Pipe()
-        _log.debug("Preparing Subprocess")
-
-        p = multiprocessing.Process(target=plot_script, args=(child_conn, self.__data_snapshot, self._config['plot'] ))
-        _log.debug("Starting Subprocess")
-        p.start()
-        self.__data_snapshot = {}
-        _log.debug("Waiting for subprocess to finish")
-        while p.is_alive():
-            _log.debug("Still waiting ...")
-            yield sleep(0.5)
-        #p.join()
-        _log.debug("Receiving data")
-        if p.exitcode !=0:
-            _log.error('Subprocess returned with exitcode: {}'.format(p.exitcode))
-        else:
-            _log.debug('Subprocess exitcode: {}'.format(p.exitcode))
-
-        try:
-            plt = parent_conn.recv()
-            _log.debug("Received {} bytes".format(len(plt)))
-        except Exception as E:
-            _log.error('Error communicating with subprocess:\n {}'.format(E))
-            return
-        _log.debug("Setting bandpass sensor with timestamp")
-        self._bandpass.set_value(plt)
-        _log.debug("Ready for next plot")
-
-        self.__plotting = False
-        lock.release()
+        _log.warning('Plotting n ot implemented')
+#        if not lock.acquire(block=False):
+#            return
+#
+#        _log.debug("Called plot")
+#        if self.__plotting:
+#            log.warning("Previous plot not finished, dropping plot!")
+#            return
+#        self.__plotting = True
+#
+#        def plot_script(conn, data, plotmap, ndisplay_channels=1024):
+#            """
+#            data dict: [key] [list of data sets]
+#            plotmap dict: [key] figure numer
+#            """
+#            import matplotlib as mpl
+#            mpl.use('Agg')
+#            import numpy as np
+#            import pylab as plt
+#            import astropy.time
+#
+#            import sys
+#            if sys.version_info[0] >=3:
+#                import io
+#            else:
+#                import cStringIO as io
+#
+#            import base64
+#            mpl.rcParams.update(mpl.rcParamsDefault)
+#            mpl.use('Agg')
+#            ########################################################################
+#            # Actual plot routine
+#            ########################################################################
+#            # Reorder by subplot
+#            ko = {}
+#            for k,i in plotmap.items():
+#                if i not in ko:
+#                    ko[i] = []
+#                ko[i].append(k)
+#
+#            figsize = {2: (8, 4), 4: (8, 8)}
+#            fig = plt.figure(figsize=figsize[len(ko)])
+#
+#            timestamp = None
+#
+#            # loop over suplotindices
+#            for si, plot_keys in ko.items():
+#                sub = fig.add_subplot(si)
+#                for k in sorted(plot_keys):
+#                    S = np.zeros(ndisplay_channels)
+#                    T = 0
+#
+#                    if k not in data:
+#                        #_log.warning("{} not in data!".format(k))
+#                        #_log.debug("Data: {}".format(data))
+#                        continue
+#
+#                    for d in data[k]:
+#                        di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
+#                        if np.isfinite(di).all():
+#                            S += di
+#                            T += d['integration_time']
+#                            timestamp = d['timestamp'][-1]
+#
+#                    sub.plot(10. * np.log10(S / T), label="{} (T = {.2} s)".format(k.replace('_', ' '), T))
+#                sub.legend()
+#                sub.set_xlabel('Channel')
+#                sub.set_ylabel('PSd [dB]')
+#            if timestamp:
+#                fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
+#            else:
+#                fig.suptitle('NO DATA {}'.format(astropy.time.Time.now().isot))
+#
+#            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+#
+#            ########################################################################
+#            # End of plot
+#            ########################################################################
+#            fig_buffer = io.BytesIO()
+#            fig.savefig(fig_buffer, format='png')
+#            fig_buffer.seek(0)
+#            b64 = base64.b64encode(fig_buffer.read())
+#            conn.send(b64)
+#            conn.close()
+#
+#        _log.debug("Create pipe")
+#        parent_conn, child_conn = multiprocessing.Pipe()
+#        _log.debug("Preparing Subprocess")
+#
+#        p = multiprocessing.Process(target=plot_script, args=(child_conn, self.__data_snapshot, self._config['plot'] ))
+#        _log.debug("Starting Subprocess")
+#        p.start()
+#        self.__data_snapshot = {}
+#        _log.debug("Waiting for subprocess to finish")
+#        while p.is_alive():
+#            _log.debug("Still waiting ...")
+#            yield sleep(0.5)
+#        #p.join()
+#        _log.debug("Receiving data")
+#        if p.exitcode !=0:
+#            _log.error('Subprocess returned with exitcode: {}'.format(p.exitcode))
+#        else:
+#            _log.debug('Subprocess exitcode: {}'.format(p.exitcode))
+#
+#        try:
+#            plt = parent_conn.recv()
+#            _log.debug("Received {} bytes".format(len(plt)))
+#        except Exception as E:
+#            _log.error('Error communicating with subprocess:\n {}'.format(E))
+#            return
+#        _log.debug("Setting bandpass sensor with timestamp")
+#        self._bandpass.set_value(plt)
+#        _log.debug("Ready for next plot")
+#
+#        self.__plotting = False
+#        lock.release()
 
 
     @state_change(target="ready", allowed=["configured"], intermediate="capture_starting")
