@@ -60,17 +60,17 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
-    "mode": "Timing",
-    "cod": 0,                             # dm for coherent filterbanking, tested up to 3000, this will overwrite the DM got from par file if it is non-zero
-    "npol": 4,                               # for search mode product, output 1 (Intensity) or 4 (Coherence) products
-    "decimation": 8,                         # decimation in frequency for filterbank output
-    "filterbank_nchannels": 8192,            # no of filterbank channels before decimation in digifits
-    "zaplist": "800:1230",                   # frequncy zap list
+    "mode": "Timing",                        # Timing, Searching, Baseband, Leap_baseband
+    "cod": 0,                                # dm for coherent filterbanking, tested up to 3000, this will overwrite the DM got from par file if it is non-zero
+    "npol": 4,                               # For search mode product, output 1 (Intensity) or 4 (Coherence) products
+    "decimation": 8,                         # Decimation in frequency for filterbank output
+    "filterbank_nchannels": 8192,            # Number of filterbank channels before decimation in digifits
+    "zaplist": "800:1230",                   # Frequncy zap list
     "epta_directory": "epta",                # Data will be read from /mnt/epta_directory
-    "nchannels": 1024,                       # only used in timing mode
-    "nbins": 1024,                           # only used in timing mode
-    "tempo2_telescope_name": "Effelsberg",
-    "merge_application": "edd_merge",
+    "nchannels": 1024,                       # Number of channels in pulsar archive, only used in timing mode
+    "nbins": 1024,                           # Number of time bins in pulsar archive, only used in timing mode
+    "tempo2_telescope_name": "Effelsberg",   # Effelsberg, SKA-MPG
+    "merge_application": "edd_merge",        # edd_merge, edd_merge_10to8, edd_roach_merge, edd_roach_merge_leap
     "npart": 2,
     "input_data_streams":
     [
@@ -117,11 +117,21 @@ DEFAULT_CONFIG = {
     {
         "args": "-L 10 -r -minram 1024"
     },
-    "db_params":
+    "dada_params":
     {
         "size": 409600000,
         "number": 32
-    }
+    },
+    "dadc_params":
+    {
+        "size": 409600000,
+        "number": 32
+    },
+    "dadf_params":
+    {
+        "size": 409600000,
+        "number": 32
+    },
 }
 
 
@@ -149,7 +159,6 @@ def parse_tag(source_name):
 class ArchiveAdder(FileSystemEventHandler):
     def __init__(self, output_dir, zaplist):
         super(ArchiveAdder, self).__init__()
-        #self.output_dir = output_dir
         self.first_file = True
         self.freq_zap_list = ""
         self.time_zap_list = ""
@@ -253,7 +262,7 @@ class EddPulsarPipeline(EDDPipeline):
         """@brief initialize the pipeline."""
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
         self.mkrec_cmd = []
-        self._dada_buffers = ["dada", "dadc"]
+        self._dada_buffers = ["dada", "dadc", "dadf"]
         self._dspsr = None
         self._mkrecv_ingest_proc = None
         self._archive_directory_monitor = None
@@ -445,15 +454,14 @@ class EddPulsarPipeline(EDDPipeline):
             self._config['input_data_streams'] = l
             log.debug(self._config)
 
-
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
         self.__coreManager = CoreManager(self.numa_number)
-        self.__coreManager.add_task("mkrecv", 8, prefere_isolated=True)
+        self.__coreManager.add_task("mkrecv", 9, prefere_isolated=True)
         self.__coreManager.add_task("single", 1)
-        self.__coreManager.add_task("dspsr", 4)
-
+        self.__coreManager.add_task("dspsr", 1)
+        self.__coreManager.add_task("four", 4)
         # The master contoller provides the data store IP as default gloal
         # config to all pipelines
         self.__eddDataStore = EDDDataStore(self._config["data_store"]["ip"], self._config["data_store"]["port"])
@@ -461,8 +469,10 @@ class EddPulsarPipeline(EDDPipeline):
         self.sync_epoch = self._config['input_data_streams'][0]['sync_time']
         log.info("sync_epoch = {}".format(self.sync_epoch))
 
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+        yield self._create_ring_buffer(self._config["dada_params"]["size"], self._config["dada_params"]["number"], "dada", self.numa_number)
+        yield self._create_ring_buffer(self._config["dadc_params"]["size"], self._config["dadc_params"]["number"], "dadc", self.numa_number)
+        if self._config["data_store"] == "SKA-MPG":
+            yield self._create_ring_buffer(self._config["dadf_params"]["size"], self._config["dadf_params"]["number"], "dadf", self.numa_number)
 
         self.epta_dir = os.path.join("/mnt/", self._config["epta_directory"])
         if not os.path.isdir(self.epta_dir):
@@ -522,11 +532,12 @@ class EddPulsarPipeline(EDDPipeline):
         header["key"] = self._dada_buffers[0]
         log.debug("  - Dada key: {}".format(header['key']))
         if header["instrument"] == "SKARAB":
-            header["mc_source"] = self._config['input_data_streams'][0][
-            "ip"]
+            for i in self._config['input_data_streams']:
+                header["mc_source"] += i["ip"] + ","
+            header["mc_source"] = header["mc_source"][:-1]
         else:
             header["mc_source"] = self._config['input_data_streams'][0][
-            "ip"] + "," + self._config['input_data_streams'][1]["ip"]
+                "ip"] + "," + self._config['input_data_streams'][1]["ip"]
         log.debug("  - mc source: {}".format(header['mc_source']))
         header["mc_streaming_port"] = self._config[
             'input_data_streams'][0]["port"]
@@ -635,8 +646,12 @@ class EddPulsarPipeline(EDDPipeline):
             delete=False)
         log.debug("Writing dada key file to {0}".format(
             self.dada_key_file.name))
-        key_string = make_dada_key_string(self._dada_buffers[1])
-        self.dada_key_file.write(make_dada_key_string(self._dada_buffers[1]))
+        if self._config["tempo2_telescope_name"] == "SKA-MPG":
+            key_string = make_dada_key_string(self._dada_buffers[2])
+            self.dada_key_file.write(make_dada_key_string(self._dada_buffers[2]))
+        else:
+            key_string = make_dada_key_string(self._dada_buffers[1])
+            self.dada_key_file.write(make_dada_key_string(self._dada_buffers[1]))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         self.dada_header_file.close()
         self.dada_key_file.close()
@@ -695,65 +710,106 @@ class EddPulsarPipeline(EDDPipeline):
                 epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name.split("_")[0][1:]))
                 if (parse_tag(self._source_name) != "R") and self.pulsar_flag:
                     cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
-                            numa=self.numa_number,
-                            args=self._config["dspsr_params"]["args"],
-                            nchan="-F {}:D".format(self._config["nchannels"]),
-                            nbin="-b {}".format(self._config["nbins"]),
-                            name=self._source_name.split("_")[0],
-                            predictor="/tmp/t2pred.dat",
-                            parfile=epta_file,
-                            cpus=self.__coreManager.get_coresstr('dspsr'),
-                            cuda_number=self.cuda_number,
-                            keyfile=self.dada_key_file.name)
+                        numa=self.numa_number,
+                        args=self._config["dspsr_params"]["args"],
+                        nchan="-F {}:D".format(self._config["nchannels"]),
+                        nbin="-b {}".format(self._config["nbins"]),
+                        name=self._source_name.split("_")[0],
+                        predictor="/tmp/t2pred.dat",
+                        parfile=epta_file,
+                        cpus=self.__coreManager.get_coresstr('dspsr'),
+                        cuda_number=self.cuda_number,
+                        keyfile=self.dada_key_file.name)
 
                 elif parse_tag(self._source_name) == "R":
-                    cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                            numa=self.numa_number,
-                            args=self._config["dspsr_params"]["args"],
-                            nchan="-F {}:D".format(self._config["nchannels"]),
-                            name=self._source_name.split("_")[0],
-                            cpus=self.__coreManager.get_coresstr('dspsr'),
-                            cuda_number=self.cuda_number,
-                            keyfile=self.dada_key_file.name)
+                    cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench -x 8192 {nchan} -cpu {cpus} -N {name} -cuda {cuda_number} {keyfile}".format(
+                        numa=self.numa_number,
+                        args=self._config["dspsr_params"]["args"],
+                        nchan="-F {}:D".format(self._config["nchannels"]),
+                        name=self._source_name.split("_")[0],
+                        cpus=self.__coreManager.get_coresstr('dspsr'),
+                        cuda_number=self.cuda_number,
+                        keyfile=self.dada_key_file.name)
                 else:
                     error = "source is unknown"
                     raise EddPulsarPipelineError(error)
 
-
             if self._config["mode"] == "Searching":
-                cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}_{DM}_{npol}.fits {keyfile}".format(numa=self.numa_number, npol=self._config["npol"], DM=self.dm, nchan=self._config["filterbank_nchannels"], decimation=self._config["decimation"], name=self._source_name, cpus=self.__coreManager.get_coresstr('dspsr'), cuda_number=self.cuda_number, keyfile=self.dada_key_file.name)
+                cmd = "numactl -m {numa} digifits -b 8 -F {nchan}:D -D {DM} -p {npol} -f {decimation} -do_dedisp -x 2048 -cpu {cpus} -cuda {cuda_number} -o {name}_{DM}_{npol}.fits {keyfile}".format(
+                    numa=self.numa_number, npol=self._config["npol"],
+                    DM=self.dm,
+                    nchan=self._config["filterbank_nchannels"],
+                    decimation=self._config["decimation"],
+                    name=self._source_name,
+                    cpus=self.__coreManager.get_coresstr('dspsr'),
+                    cuda_number=self.cuda_number,
+                    keyfile=self.dada_key_file.name)
 
             if self._config["mode"] == "Baseband":
-                cmd = "numactl -m {numa} dada_dbdisk -D {in_path} -b {cpus} -o -k dadc".format(
+                cmd = "numactl -m {numa} taskset -c {cpus} dada_dbdisk -D {in_path} -b {cpus} -o -k dadc".format(
                     numa=self.numa_number,
                     in_path=self.in_path,
                     cpus=self.__coreManager.get_coresstr('dspsr'))
 
+            if self._config["mode"] == "Leap_baseband":
+                cmd = "numactl -m {numa} taskset -c {cpus} dbdiskleap -n 8".format(
+                    numa=self.numa_number,
+                    cpus=self.__coreManager.get_coresstr('dspsr'))
+
             log.debug("Running command: {0}".format(cmd))
             if self._config["mode"] == "Timing":
-                log.info("Staring DSPSR")
+                log.info("Staring dspsr")
             if self._config["mode"] == "Searching":
-                log.info("Staring DIGIFITS")
+                log.info("Staring digifits")
             if self._config["mode"] == "Baseband":
                 log.info("Staring dada_dbdisk")
+            if self._config["mode"] == "Leap_baseband":
+                log.info("Staring dbdiskleap")
             self._dspsr = ManagedProcess(cmd)
             self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
 
             ####################################################
-            #STARTING EDDPolnMerge                             #
+            #STARTING 10 bit unpacker                          #
             ####################################################
-            cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
-                numa=self.numa_number, cpu=self.__coreManager.get_coresstr('single'), merge_application=self._config["merge_application"], npart=self._config["npart"])
-            log.debug("Running command: {0}".format(cmd))
-            log.info("Staring EDDPolnMerge")
-            self._polnmerge_proc = ManagedProcess(cmd)
-            self._subprocessMonitor.add(
-                self._polnmerge_proc, self._subprocess_error)
+
+            if self._config["tempo2_telescope_name"] == "SKA-MPG":
+                cmd = "numactl -m {numa} taskset -c {cpu} edd_merge_10to8 --log_level=info".format(
+                    numa=self.numa_number,
+                    cpu=self.__coreManager.get_coresstr('four'))
+                log.debug("Running command: {0}".format(cmd))
+                log.info("Staring EDDPolnMerge")
+                self._unpack_proc = ManagedProcess(cmd)
+                self._subprocessMonitor.add(
+                    self._unpack_proc, self._subprocess_error)
+
+                ####################################################
+                #STARTING Merge_application                        #
+                ####################################################
+                cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -i dadc -o dadf --log_level=info".format(
+                    numa=self.numa_number,
+                    cpu=self.__coreManager.get_coresstr('single'),
+                    merge_application=self._config["merge_application"])
+                log.debug("Running command: {0}".format(cmd))
+                log.info("Staring EDDPolnMerge")
+                self._polnmerge_proc = ManagedProcess(cmd)
+                self._subprocessMonitor.add(
+                    self._polnmerge_proc, self._subprocess_error)
+            else:
+                cmd = "numactl -m {numa} taskset -c {cpu} {merge_application} -p {npart} --log_level=info".format(
+                    numa=self.numa_number,
+                    cpu=self.__coreManager.get_coresstr('four'),
+                    merge_application=self._config["merge_application"],
+                    npart=self._config["npart"])
+                log.debug("Running command: {0}".format(cmd))
+                log.info("Staring EDDPolnMerge")
+                self._polnmerge_proc = ManagedProcess(cmd)
+                self._subprocessMonitor.add(
+                    self._polnmerge_proc, self._subprocess_error)
 
             ####################################################
             #STARTING MKRECV                                   #
             ####################################################
-            cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --quiet".format(
+            cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_v4 --header {dada_header} --lst --quiet".format(
                 numa=self.numa_number, cpu=self.__coreManager.get_coresstr('mkrecv'), dada_header=self.dada_header_file.name)
             log.debug("Running command: {0}".format(cmd))
             log.info("Staring MKRECV")
@@ -798,11 +854,15 @@ class EddPulsarPipeline(EDDPipeline):
                        self._polnmerge_proc]
             for proc in process:
                 proc.terminate(timeout=1)
+            if self._config["tempo2_telescope_name"] == "SKA-MPG":
+                self._unpack_proc.terminate(timeout=1)
             if os.path.isfile("/tmp/t2pred.dat"):
                 os.remove("/tmp/t2pred.dat")
             log.info("reset DADA buffer")
-            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
-            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+            yield self._create_ring_buffer(self._config["dada_params"]["size"], self._config["dada_params"]["number"], "dada", self.numa_number)
+            yield self._create_ring_buffer(self._config["dadc_params"]["size"], self._config["dadc_params"]["number"], "dadc", self.numa_number)
+            if self._config["tempo2_telescope_name"] == "SKA-MPG":
+                yield self._create_ring_buffer(self._config["dadf_params"]["size"], self._config["dadf_params"]["number"], "dadf", self.numa_number)
             del self._subprocessMonitor
         else:
             raise StateChange("streaming")
