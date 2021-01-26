@@ -550,7 +550,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("  - sample_clock: {}".format(header['sample_clock']))
         header["source_name"] = self._source_name
         header["obs_id"] = "{0}_{1}".format(scannum, subscannum)
-        header["filesize"] = int(float(self._config["db_params"]["size"]) * 10.0)
+        header["filesize"] = int(float(self._config["dada_params"]["size"]) /8.0)
         log.debug("  - obs_id: {}".format(header['obs_id']))
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
