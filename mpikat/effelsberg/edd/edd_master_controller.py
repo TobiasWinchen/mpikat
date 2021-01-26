@@ -375,6 +375,7 @@ class EddMasterController(EDDPipeline):
         configuration.
         """
         log.info("Provision request received")
+
         @coroutine
         def wrapper():
             try:
@@ -415,6 +416,7 @@ class EddMasterController(EDDPipeline):
             else:
                 req.reply("ok")
         self.ioloop.add_callback(wrapper)
+        raise AsyncReply
 
 
     @coroutine
