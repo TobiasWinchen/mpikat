@@ -15,7 +15,7 @@ import json
 from datetime import datetime
 from threading import Thread, Event, Lock
 import copy
-import multiprocessing
+
 
 import sys
 if sys.version_info[0] >=3:
@@ -36,7 +36,7 @@ import mpikat.utils.numa as numa
 
 _log = logging.getLogger("mpikat.hdf5pipeline")
 
-
+from concurrent.futures import ProcessPoolExecutor
 
 def conditional_update(sensor, value, status=1, timestamp=None):
     """
@@ -44,6 +44,93 @@ def conditional_update(sensor, value, status=1, timestamp=None):
     """
     if sensor.value() != value:
         sensor.set_value(value, status, timestamp=timestamp)
+
+
+def plot_script(data, plotmap, ndisplay_channels=1024):
+    """
+    data dict: [key] [list of data sets]
+    plotmap dict: [key] figure numer
+    """
+    print(data)
+    data = {}
+
+    import matplotlib as mpl
+    mpl.use('Agg')
+    import numpy as np
+    import pylab as plt
+    import astropy.time
+
+    import sys
+    if sys.version_info[0] >=3:
+        import io
+    else:
+        import cStringIO as io
+        io.BytesIO = io.StringIO
+
+    import base64
+    mpl.rcParams.update(mpl.rcParamsDefault)
+    mpl.use('Agg')
+    ########################################################################
+    # Actual plot routine
+    ########################################################################
+    # Reorder by subplot
+    ko = {}
+    for k,i in plotmap.items():
+        if i not in ko:
+            ko[i] = []
+        ko[i].append(k)
+
+    figsize = {2: (8, 4), 4: (8, 8)}
+    fig = plt.figure(figsize=figsize[len(ko)])
+
+    timestamp = None
+
+    # loop over suplotindices
+    for si, plot_keys in ko.items():
+        sub = fig.add_subplot(si)
+
+        if not data:
+            sub.text(.5, .5, "NO DATA")
+
+        for k in sorted(plot_keys):
+            S = np.zeros(ndisplay_channels)
+            T = 1E-64
+
+            if k not in data:
+                #_log.warning("{} not in data!".format(k))
+                #_log.debug("Data: {}".format(data))
+                continue
+
+            for d in data[k]:
+                di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
+                if np.isfinite(di).all():
+                    S += di
+                    T += d['integration_time']
+                    timestamp = d['timestamp'][-1]
+
+            sub.plot(10. * np.log10(S / T), label="{} (T = {:.2f} s)".format(k.replace('_', ' '), T))
+        sub.legend()
+        sub.set_xlabel('Channel')
+        sub.set_ylabel('PSd [dB]')
+    if timestamp:
+        fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
+    else:
+        fig.suptitle('NO DATA {}'.format(astropy.time.Time.now().isot))
+
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    ########################################################################
+    # End of plot
+    ########################################################################
+    fig_buffer = io.BytesIO()
+    fig.savefig(fig_buffer, format='png')
+    fig_buffer.seek(0)
+    b64 = base64.b64encode(fig_buffer.read())
+
+    return b64
+
+
+
 
 
 
@@ -112,7 +199,6 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         self.__measuring = False
         self.__plotting = False
         self.__data_snapshot = {}
-        self.__data_snapshot_lock = Lock()
 
 
         self._capture_threads = []
@@ -172,6 +258,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             t.join(10.0)
         self._capture_threads = []
         _log.debug("Capture threads cleaned")
+        _log.debug("Stopping subprocess pool")
 
 
     @state_change(target="idle", intermediate="deconfiguring", error='panic')
@@ -209,6 +296,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
                     continue
                 self.mc_subscriptions[hdf5_group]['attributes'][key] = stream_description[key]
         _log.debug("Got {} subscription groups".format(len(self.mc_subscriptions)))
+        self.__counter = 0
         yield self.plot()
 
 
@@ -220,10 +308,16 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             _log.debug("Not measuring, Dropping package")
 
         if self._config['plot']:
-            with self.__data_snapshot_lock:
-                if data[0] not in self.__data_snapshot:
-                    self.__data_snapshot[data[0]] = []
-                self.__data_snapshot[data[0]].append(data[1].copy())
+            if data[0] not in self.__data_snapshot:
+                self.__data_snapshot[data[0]] = []
+
+        ds = {}
+        ds['spectrum'] = np.random.rand(1024*64)
+        ds['timestamp'] = [self.__counter + 1]
+        ds['integration_time'] = 23.
+
+        #self.__data_snapshot[data[0]].append(data[1]['spectrum'].copy())
+        self.__data_snapshot[data[0]].append(ds)
 
 
     @coroutine
@@ -246,119 +340,22 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             return
         self.__plotting = True
 
-        def plot_script(conn, data, plotmap, ndisplay_channels=1024):
-            """
-            data dict: [key] [list of data sets]
-            plotmap dict: [key] figure numer
-            """
-            import matplotlib as mpl
-            mpl.use('Agg')
-            import numpy as np
-            import pylab as plt
-            import astropy.time
-
-            import sys
-            if sys.version_info[0] >=3:
-                import io
-            else:
-                import cStringIO as io
-                io.BytesIO = io.StringIO
-
-            import base64
-            mpl.rcParams.update(mpl.rcParamsDefault)
-            mpl.use('Agg')
-            ########################################################################
-            # Actual plot routine
-            ########################################################################
-            # Reorder by subplot
-            ko = {}
-            for k,i in plotmap.items():
-                if i not in ko:
-                    ko[i] = []
-                ko[i].append(k)
-
-            figsize = {2: (8, 4), 4: (8, 8)}
-            fig = plt.figure(figsize=figsize[len(ko)])
-
-            timestamp = None
-
-            # loop over suplotindices
-            for si, plot_keys in ko.items():
-                sub = fig.add_subplot(si)
-
-                if not data:
-                    sub.text(.5, .5, "NO DATA")
-
-                for k in sorted(plot_keys):
-                    S = np.zeros(ndisplay_channels)
-                    T = 1E-64
-
-                    if k not in data:
-                        #_log.warning("{} not in data!".format(k))
-                        #_log.debug("Data: {}".format(data))
-                        continue
-
-                    for d in data[k]:
-                        di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
-                        if np.isfinite(di).all():
-                            S += di
-                            T += d['integration_time']
-                            timestamp = d['timestamp'][-1]
-
-                    sub.plot(10. * np.log10(S / T), label="{} (T = {:.2f} s)".format(k.replace('_', ' '), T))
-                sub.legend()
-                sub.set_xlabel('Channel')
-                sub.set_ylabel('PSd [dB]')
-            if timestamp:
-                fig.suptitle('{}'.format(astropy.time.Time(timestamp, format='unix').isot))
-            else:
-                fig.suptitle('NO DATA {}'.format(astropy.time.Time.now().isot))
-
-            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-
-            ########################################################################
-            # End of plot
-            ########################################################################
-            fig_buffer = io.BytesIO()
-            fig.savefig(fig_buffer, format='png')
-            fig_buffer.seek(0)
-            b64 = base64.b64encode(fig_buffer.read())
-            conn.send(b64)
-            conn.close()
-
         _log.error("Obtain Lock ")
-        with self.__data_snapshot_lock:
 
-            _log.debug("Create pipe")
-            parent_conn, child_conn = multiprocessing.Pipe()
-            _log.debug("Preparing Subprocess")
-
-            p = multiprocessing.Process(target=plot_script, args=(child_conn, copy.copy(self.__data_snapshot), self._config['plot'] ))
-            _log.debug("Starting Subprocess")
-            p.start()
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            p = executor.submit(plot_script, self.__data_snapshot, self._config['plot'])
             self.__data_snapshot = {}
+            _log.debug("Waiting for subprocess to finish")
 
-
-        _log.debug("Waiting for subprocess to finish")
-        while p.is_alive():
-            _log.debug("Still waiting ...")
-            yield sleep(0.5)
-        #p.join()
-        _log.debug("Receiving data")
-        if p.exitcode !=0:
-            _log.error('Subprocess returned with exitcode: {}'.format(p.exitcode))
-        else:
-            _log.debug('Subprocess exitcode: {}'.format(p.exitcode))
-
-        try:
-            plt = parent_conn.recv()
-            _log.debug("Received {} bytes".format(len(plt)))
-        except Exception as E:
-            _log.error('Error communicating with subprocess:\n {}'.format(E))
-            return
-        _log.debug("Setting bandpass sensor with timestamp")
-        self._bandpass.set_value(plt)
-        _log.debug("Ready for next plot")
+            try:
+                plt = yield p
+                _log.debug("Received {} bytes".format(len(plt)))
+            except Exception as E:
+                _log.error('Error communicating with subprocess:\n {}'.format(E))
+                return
+            _log.debug("Setting bandpass sensor with timestamp")
+            self._bandpass.set_value(plt)
+            _log.debug("Ready for next plot")
 
         self.__plotting = False
 
@@ -374,8 +371,6 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         _log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
         affinity = numa.getInfo()[nic_description['node']]['cores']
 
-        with self.__data_snapshot_lock:
-            self.__data_snapshot = {}
 
         self._capture_threads = []
         for hdf5_group_prefix, mcg in self.mc_subscriptions.items():
@@ -386,6 +381,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             ct.start()
             self._capture_threads.append(ct)
 
+        _log.debug("Starting subprocess pool")
         if self._config['plot']:
             _log.debug("Starting Callback")
             self.__plot_callback = PeriodicCallback(self.plot_wrapper, self._config['nplot'] * 1000. )
@@ -503,7 +499,7 @@ class SpeadCapture(Thread):
 
         #ToDo: fix magic numbers for parameters in spead stream
         thread_pool = spead2.ThreadPool(threads=8, affinity=[int(k) for k in numa_affinity])
-        pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
+        pool = spead2.MemoryPool(lower=16384, upper=((32*4*1024**2)+1024), max_free=64, initial=64)
         stream_config = spead2.recv.StreamConfig(bug_compat=spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, memory_allocator=pool)
         ring_stream_config = spead2.recv.RingStreamConfig(heaps=64, contiguous_only = False)
         self.stream = spead2.recv.Stream(thread_pool, stream_config, ring_stream_config)
