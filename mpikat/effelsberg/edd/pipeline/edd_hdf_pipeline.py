@@ -503,9 +503,10 @@ class SpeadCapture(Thread):
 
         #ToDo: fix magic numbers for parameters in spead stream
         thread_pool = spead2.ThreadPool(threads=8, affinity=[int(k) for k in numa_affinity])
-        self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
         pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
-        self.stream.set_memory_allocator(pool)
+        stream_config = spead2.recv.StreamConfig(bug_compat=spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, memory_allocator=pool)
+        ring_stream_config = spead2.recv.RingStreamConfig(heaps=64, contiguous_only = False)
+        self.stream = spead2.recv.Stream(thread_pool, stream_config, ring_stream_config)
 
         ##ToDo: fix magic numbers for parameters in spead stream
         #thread_pool = spead2.ThreadPool(threads=4)
