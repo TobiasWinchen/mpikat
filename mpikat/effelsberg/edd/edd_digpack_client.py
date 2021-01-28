@@ -439,6 +439,9 @@ if __name__ == "__main__":
         help='V polarisation destinations')
     parser.add_argument('--h-destinations', dest='h_destinations', type=str,
         help='H polarisation destinations')
+
+    parser.add_argument('--interface-adresses', nargs=2, dest='interface_addresses', type=str, help='Set IP of the sender nics')
+
     parser.add_argument('--log-level',dest='log_level',type=str,
         help='Logging level',default="INFO")
     parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
@@ -478,6 +481,11 @@ if __name__ == "__main__":
         actions.append((client.set_bit_width, dict(nbits=args.nbits)))
     if args.v_destinations:
         actions.append((client.set_destinations, dict(v_dest=args.v_destinations, h_dest=args.h_destinations)))
+    if args.interface_addresses:
+        actions.append((client.set_interface_address, dict(intf=0, ip=args.interface_addresses[0])))
+        actions.append((client.set_interface_address, dict(intf=1, ip=args.interface_addresses[1])))
+        
+
     if args.predecimation_factor:
         actions.append((client.set_predecimation, dict(factor=args.predecimation_factor)))
     # Always flip spectrum to either on or off

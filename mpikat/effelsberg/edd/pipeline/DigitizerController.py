@@ -121,6 +121,7 @@ _DEFAULT_CONFIG = {
         'skip_packetizer_config': False,
         'dummy_configure': False,
         'max_sync_age': 82800,
+        'interface_addresses': [],                               # if set, the digitizer nics are assigned an ip manually during configure
         "output_data_streams":
         {
             "polarization_0" :                          # polarization_0 maps to v in packetizer nomenclatura
@@ -128,14 +129,14 @@ _DEFAULT_CONFIG = {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.140+3",
                 "port": "7148",
-                "polarization": 0
+                "polarization": 0,
             },
              "polarization_1" :
             {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.144+3",
                 "port": "7148",
-                "polarization": 1
+                "polarization": 1,
             }
         }
     }
@@ -222,6 +223,8 @@ class DigitizerControllerPipeline(EDDPipeline):
                 yield self._client.flip_spectrum(self._config["flip_spectrum"])
                 yield self._client.set_bit_width(self._config["bit_depth"])
 
+                for i, ip_address in enumerate(self._config["interface_addresses"]):
+                    yield self._client.set_interface_address(i, ip_address)
                 yield self._client.set_destinations(vips, hips)
                 if self._config["sync_time"] > 0:
                     yield self._client.synchronize(self._config["sync_time"])
