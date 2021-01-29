@@ -311,13 +311,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             if data[0] not in self.__data_snapshot:
                 self.__data_snapshot[data[0]] = []
 
-        ds = {}
-        ds['spectrum'] = np.random.rand(1024*64)
-        ds['timestamp'] = [self.__counter + 1]
-        ds['integration_time'] = 23.
-
-        #self.__data_snapshot[data[0]].append(data[1]['spectrum'].copy())
-        self.__data_snapshot[data[0]].append(ds)
+        self.__data_snapshot[data[0]].append(copy.deepcopy(data[1]))
 
 
     @coroutine
