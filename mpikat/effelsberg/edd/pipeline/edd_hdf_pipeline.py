@@ -2,12 +2,14 @@
 Pipeline to record EDD data.
 
 Currently only gates spectrometer dta format is understood.
+Requires python 3.7+ and spead 3+
 """
 
 from __future__ import print_function, division, unicode_literals
 from tornado.gen import coroutine, sleep
 from tornado.ioloop import PeriodicCallback
 import logging
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 import time
 import errno
 import numpy as np
@@ -26,6 +28,8 @@ else:
 import spead2
 import spead2.recv
 
+from concurrent.futures import ProcessPoolExecutor
+
 from katcp import Sensor, ProtocolFlags
 from katcp.kattypes import (request, return_reply)
 
@@ -36,7 +40,7 @@ import mpikat.utils.numa as numa
 
 _log = logging.getLogger("mpikat.hdf5pipeline")
 
-from concurrent.futures import ProcessPoolExecutor
+
 
 def conditional_update(sensor, value, status=1, timestamp=None):
     """
@@ -46,13 +50,12 @@ def conditional_update(sensor, value, status=1, timestamp=None):
         sensor.set_value(value, status, timestamp=timestamp)
 
 
+
 def plot_script(data, plotmap, ndisplay_channels=1024):
     """
     data dict: [key] [list of data sets]
     plotmap dict: [key] figure numer
     """
-    print(data)
-    data = {}
 
     import matplotlib as mpl
     mpl.use('Agg')
@@ -88,27 +91,25 @@ def plot_script(data, plotmap, ndisplay_channels=1024):
     # loop over suplotindices
     for si, plot_keys in ko.items():
         sub = fig.add_subplot(si)
-
         if not data:
             sub.text(.5, .5, "NO DATA")
+        else:
+            for k in sorted(plot_keys):
+                S = np.zeros(ndisplay_channels)
+                T = 1E-64
 
-        for k in sorted(plot_keys):
-            S = np.zeros(ndisplay_channels)
-            T = 1E-64
+                if k not in data:
+                    #_log.warning("{} not in data!".format(k))
+                    #_log.debug("Data: {}".format(data))
+                    continue
+                for d in data[k]:
+                    di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
+                    if np.isfinite(di).all():
+                        S += di
+                        T += d['integration_time'][0]
+                        timestamp = d['timestamp'][-1]
 
-            if k not in data:
-                #_log.warning("{} not in data!".format(k))
-                #_log.debug("Data: {}".format(data))
-                continue
-
-            for d in data[k]:
-                di = d['spectrum'][1:].reshape([ndisplay_channels, (d['spectrum'].size -1) // ndisplay_channels]).sum(axis=1)
-                if np.isfinite(di).all():
-                    S += di
-                    T += d['integration_time']
-                    timestamp = d['timestamp'][-1]
-
-            sub.plot(10. * np.log10(S / T), label="{} (T = {:.2f} s)".format(k.replace('_', ' '), T))
+                sub.plot(10. * np.log10(S / T), label="{} (T = {:.2f} s)".format(k.replace('_', ' '), T))
         sub.legend()
         sub.set_xlabel('Channel')
         sub.set_ylabel('PSd [dB]')
@@ -311,7 +312,8 @@ class EDDHDF5WriterPipeline(EDDPipeline):
             if data[0] not in self.__data_snapshot:
                 self.__data_snapshot[data[0]] = []
 
-        self.__data_snapshot[data[0]].append(copy.deepcopy(data[1]))
+            _log.debug("Adding data to snapshot: {}".format(data[0]))
+            self.__data_snapshot[data[0]].append(copy.deepcopy(data[1]))
 
 
     @coroutine
@@ -327,14 +329,12 @@ class EDDHDF5WriterPipeline(EDDPipeline):
         """
 
         """
-        _log.error("Called plot")
+        _log.debug("Called plot")
 
         if self.__plotting:
             _log.warning("Previous plot not finished, dropping plot!")
             return
         self.__plotting = True
-
-        _log.error("Obtain Lock ")
 
         with ProcessPoolExecutor(max_workers=1) as executor:
             p = executor.submit(plot_script, self.__data_snapshot, self._config['plot'])
@@ -359,7 +359,7 @@ class EDDHDF5WriterPipeline(EDDPipeline):
     def capture_start(self):
         """
         """
-        _log.info("Starting FITS interface capture")
+        _log.info("Starting capture")
         nic_name, nic_description = numa.getFastestNic()
         self._capture_interface = nic_description['ip']
         _log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
@@ -498,12 +498,6 @@ class SpeadCapture(Thread):
         ring_stream_config = spead2.recv.RingStreamConfig(heaps=64, contiguous_only = False)
         self.stream = spead2.recv.Stream(thread_pool, stream_config, ring_stream_config)
 
-        ##ToDo: fix magic numbers for parameters in spead stream
-        #thread_pool = spead2.ThreadPool(threads=4)
-        #self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
-        #pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
-        #self.stream.set_memory_allocator(pool)
-        #self.rb = self.stream.ringbuffer
         self._nheaps = 0
         self._incomplete_heaps = 0
         self._complete_heaps = 0
@@ -527,7 +521,6 @@ class SpeadCapture(Thread):
             _log.debug(" - Subs {}: ip: {}, port: {}".format(i,self._mc_ip[i], self._mc_port ))
             self.stream.add_udp_reader(mg, int(self._mc_port), max_size = 9200,
                 buffer_size=1073741820, interface_address=self._capture_ip)
-
         _log.debug("Start processing heaps:")
         self._nheaps = 0
         self._incomplete_heaps = 0
@@ -557,6 +550,7 @@ class SpeadCapture(Thread):
                 _log.debug('Stop processing heaps from stream.')
                 break
 
+        _log.debug('Stream done.')
 
 
 
